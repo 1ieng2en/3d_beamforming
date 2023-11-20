@@ -6,6 +6,8 @@ import glob
 from data_importer import PointCloudManager, DataExtractor
 
 
+# this is the main part of calculation, pcd input should be aligned first in pcd_align.py
+
 base_folder = "postPCD"  # dir to PCD folders
 manager = PointCloudManager(base_folder)
 pcd_mic, pcd, filtered_pcd = manager.run()

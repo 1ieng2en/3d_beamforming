@@ -1,0 +1,7 @@
+C:\ZIM\MasterThesisProject\Stage1\Azure-Kinect-Samples\opencv-kinfu-samples\x64\Release\kinfu_example.vcxproj.CopyComplete
+C:\ZIM\MasterThesisProject\Stage1\Azure-Kinect-Samples\opencv-kinfu-samples\x64\Release\kinfu_example.exe
+C:\ZIM\MasterThesisProject\Stage1\Azure-Kinect-Samples\opencv-kinfu-samples\x64\Release\depthengine_2_0.dll
+C:\ZIM\MasterThesisProject\Stage1\Azure-Kinect-Samples\opencv-kinfu-samples\x64\Release\k4a.dll
+C:\ZIM\MasterThesisProject\Stage1\Azure-Kinect-Samples\opencv-kinfu-samples\x64\Release\k4arecord.dll
+C:\ZIM\MasterThesisProject\Stage1\Azure-Kinect-Samples\opencv-kinfu-samples\x64\Release\k4a.pdb
+C:\ZIM\MasterThesisProject\Stage1\Azure-Kinect-Samples\opencv-kinfu-samples\x64\Release\k4arecord.pdb

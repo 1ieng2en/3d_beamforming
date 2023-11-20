@@ -23,6 +23,10 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="pcd_aligner.py" />
+    <Compile Include="pcd_align.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="SoundFieldAnalysis.py" />
     <Compile Include="data_importer.py" />
     <Compile Include="main.py" />
