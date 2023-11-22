@@ -1,11 +1,13 @@
 import open3d as o3d
 import numpy as np
+import datetime
 
-class PointCloudProcessor:
+class PointCloud_PreProcessor:
     def __init__(self, file_path):
         ply_file_path = file_path + 'kf_output.ply'
         self.file_path = ply_file_path
         self.pcd = None
+        self.cropped_pcd = None
 
     def pcd_read(self):
         # Load the .ply file
@@ -41,3 +43,51 @@ class PointCloudProcessor:
 
         return cropped_geometry
 
+    def pcd_write(self):
+        # Saving the mesh into current path, naming by time
+        # Get the current date and time
+        current_datetime = datetime.datetime.now()
+
+        # Format the date and time
+        datetime_str = current_datetime.strftime("%Y%m%d_%H%M")
+
+        # Ask for notes
+        name_note = str(input("Any note on file name: "))
+
+        # Save the point cloud
+        filepath = f"PointCloud/[{name_note}]saved_pointcloud_{datetime_str}.ply"  # my file path
+        o3d.io.write_point_cloud(filepath, self.cropped_pcd)
+
+
+
+
+
+class PointCloud_PostProcessor:
+    def reader():
+        # get all files, also get the point cloud file for later use
+        files = glob.glob("Mesh/*saved_mesh_*.ply")
+        pointCloudFile = glob.glob("PointCloud/*saved_pointcloud_*.ply")
+
+        # sorting files
+        files.sort(key=os.path.getmtime)
+        pointCloudFile.sort(key=os.path.getmtime)
+
+        # print menu
+        for i, file in enumerate(pointCloudFile):
+            print(f"{i}: {pointCloudFile[i]}")
+
+        # get user input
+        selection = int(input("Enter the number of the file you want to view: "))
+
+        # get file
+        file_to_view = pointCloudFile[selection]
+        # pcd_file_to_view = pointCloudFile[selection]
+
+        # read file
+        pcd = o3d.io.read_point_cloud(file_to_view)
+        mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(
+                size=0.5)
+
+        # visualize using vertex normals method
+        o3d.visualization.draw_geometries([mesh_frame, pcd])
+        return pcd

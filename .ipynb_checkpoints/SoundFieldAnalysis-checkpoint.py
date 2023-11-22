@@ -25,7 +25,7 @@ class SoundFieldAnalysis:
         self.freq = freq
         self.seg_size = seg_size
         self.nperseg = nperseg
-        self.S = 0
+        self.S = None
 
     def DAS(self, points_subset):
         T = 10
@@ -56,8 +56,8 @@ class SoundFieldAnalysis:
                     Vmn[i, j, :] = vm * np.conj(vn)
                     Vmn2[i, j, :] = np.abs(vm) ** 2 * np.abs(vn) ** 2
 
-        self.S = Csm
         Jup = Csm[:, :, None] * Vmn
+        self.S = Jup
         result = 1 / np.sqrt(36*35) * (np.abs(Jup.sum(axis=(0, 1))) / np.sqrt(Vmn2.sum(axis=(0, 1))))
         return result, f
 
