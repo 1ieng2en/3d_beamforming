@@ -27,6 +27,9 @@ class SoundFieldAnalysis:
         self.nperseg = nperseg
         self.S = 0
         self.Pxy = 0
+        self.f = 0
+        self.plotc = 0
+        self.distance = 0
 
     def DAS(self, points_subset):
         T = 10
@@ -43,6 +46,7 @@ class SoundFieldAnalysis:
 
         Csm = np.zeros((m, m), dtype=complex)
         distance = scipy.spatial.distance.cdist(self.mic_array, points_subset, metric="euclidean")
+        self.distance = distance
         Vmn = np.zeros((m, m, len(points_subset)), dtype=complex)
         Vmn2 = np.zeros((m, m, len(points_subset)), dtype=complex)
 
@@ -59,6 +63,9 @@ class SoundFieldAnalysis:
 
         self.S = Csm
         self.Pxy = Pxy
+        self.f = f
+        self.index = index
+    
         Jup = Csm[:, :, None] * Vmn
         result = 1 / np.sqrt(36*35) * (np.abs(Jup.sum(axis=(0, 1))) / np.sqrt(Vmn2.sum(axis=(0, 1))))
         return result, f
@@ -66,12 +73,28 @@ class SoundFieldAnalysis:
     def MUSIC(self):
         S = self.S
         eigVal, eigVec = np.linalg.eig(S)
-        
+        eigVal = np.sqrt(eigVal)
+        E_n = eigVec[:,1:]*eigVal[1:]
 
-        return eigVal, eigVec
+        omega = 2*np.pi*self.f[self.index]
+        C = 343
+        k = omega/C
+        distance = scipy.spatial.distance.cdist(self.mic_array, self.points, metric="euclidean")
+        v = np.exp(-1j * k * distance) / distance
 
+        P = []
+        for i in range(len(distance[2,:])):
+            a = v[:,i]
+            Pi =  1/(np.abs(a.conj().T @ E_n @ E_n.conj().T @ a))**2
+            P.append(Pi)
 
-    def calculate_3D_DAS(self):
+        return np.array(P)
+
+    def CS(self):
+
+        return P
+
+    def calculate(self):
         split_points = np.array_split(self.points, np.round(self.points.shape[0] / self.seg_size))
         J = []
         for splitP in split_points:
@@ -80,9 +103,15 @@ class SoundFieldAnalysis:
         result_J = np.concatenate(J, axis=0)
         return result_J
 
-    def plot(self, dynamic_range=5):
-        result_J = self.calculate_3D_DAS()
-        plotc = 20 * np.log10(np.abs(result_J / 20e-6))
+    def plot(self, mode = "DAS", dynamic_range=5):
+        if mode == "DAS":
+            result_J = self.calculate()
+            plotc = 20 * np.log10(np.abs(result_J / 20e-6))
+        elif mode == "MUSIC":
+            result_J = self.MUSIC()
+            plotc = 20 * np.log10(np.abs(result_J / 20e-6))
+
+        self.plotc = plotc
         plotc_max = np.max(plotc)
         plotc_min = plotc_max - dynamic_range
         plotc_clamped = np.clip(plotc, plotc_min, plotc_max)

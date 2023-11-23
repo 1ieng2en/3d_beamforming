@@ -21,8 +21,11 @@ while True:
         break  
 
     dynamic_range_input = input("Enter dynamic range (or 'n' to exit): ")
+
+    mode = input("enter mode: ")
     print("Input done, now calculating")
     print("---------------------------")
+
     if dynamic_range_input.lower() == 'n':
         break
 
@@ -34,6 +37,6 @@ while True:
         continue
 
     BF_analysis = SoundFieldAnalysis(pcd_mic, recording, filtered_pcd, freq=freq)
-    BF_analysis.calculate_3D_DAS()
-    BF_analysis.plot(dynamic_range=dynamic_range)
+    BF_analysis.calculate()
+    BF_analysis.plot(mode = mode, dynamic_range=dynamic_range)
     print("finish calculation, close result window to quit or assign new parameters")
