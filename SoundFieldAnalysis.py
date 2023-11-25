@@ -2,6 +2,7 @@ import numpy as np
 import scipy.spatial
 from scipy.signal import welch
 import pyvista as pv
+import cvxpy as cp
 
 class SoundFieldAnalysis:
     """
@@ -65,15 +66,20 @@ class SoundFieldAnalysis:
         self.Pxy = Pxy
         self.f = f
         self.index = index
+
+        # under the idea of signal subspace, why not take the eigen value of E to get a better recording?
+        # eigVal, eigVec = np.linalg.eig(Csm)
+        # E_n = eigVec[:,1]*eigVal[1]
     
         Jup = Csm[:, :, None] * Vmn
+        # Jup = E_n[:, None] @ Vmn
         result = 1 / np.sqrt(36*35) * (np.abs(Jup.sum(axis=(0, 1))) / np.sqrt(Vmn2.sum(axis=(0, 1))))
         return result, f
 
     def MUSIC(self):
         S = self.S
         eigVal, eigVec = np.linalg.eig(S)
-        eigVal = np.sqrt(eigVal)
+
         E_n = eigVec[:,1:]*eigVal[1:]
 
         omega = 2*np.pi*self.f[self.index]
@@ -92,7 +98,35 @@ class SoundFieldAnalysis:
 
     def CS(self):
 
-        return P
+        omega = 2*np.pi*self.f[self.index]
+        C = 343
+        k = omega/C
+        distance = scipy.spatial.distance.cdist(self.mic_array, self.points, metric="euclidean")
+        v = np.exp(-1j * k * distance) / distance
+
+        S = self.S
+        eigVal, eigVec = np.linalg.eig(S)
+        # eigVal = np.sqrt(eigVal)
+        en = eigVec[:,1:]*eigVal[1:]
+        b = S-en
+
+        eps = cp.Variable()
+        x = cp.Variable(len(v[2,:]),  nonneg=True)
+        objective = cp.Minimize(cp.sum(x) + 1.3* eps)
+        constraints = [cp.sum_squares(v @ x - b) <= eps, eps >= 0]
+
+        #objective = cp.Minimize(cp.sum(x))
+        #constraints = [cp.sum_squares(v @ x - b)<=eps]
+        prob = cp.Problem(objective, constraints)
+
+        # The optimal objective value is returned by `prob.solve()`.
+        result = prob.solve(verbose=True)
+
+        if prob.status == "optimal":
+            optimal_x = x.value
+        print("eps:" ,eps.value)
+
+        return optimal_x
 
     def calculate(self):
         split_points = np.array_split(self.points, np.round(self.points.shape[0] / self.seg_size))
@@ -109,6 +143,9 @@ class SoundFieldAnalysis:
             plotc = 20 * np.log10(np.abs(result_J / 20e-6))
         elif mode == "MUSIC":
             result_J = self.MUSIC()
+            plotc = 20 * np.log10(np.abs(result_J / 20e-6))
+        elif mode == "CS":
+            result_J = self.CS()
             plotc = 20 * np.log10(np.abs(result_J / 20e-6))
 
         self.plotc = plotc
