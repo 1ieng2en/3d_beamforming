@@ -26,7 +26,7 @@ class PointCloudManager:
 
         return pcd_mic, pcd, filtered_pcd
 
-    def run(self):
+    def run(self, index = None):
         subfolders = self.list_subfolders()
 
         if not subfolders:
@@ -37,7 +37,10 @@ class PointCloudManager:
         for i, folder in enumerate(subfolders):
             print(f"{i}: {folder}")
 
-        choice = int(input("Enter the number of the measurement you want to load: "))
+        if index == None:    
+            choice = int(input("Enter the number of the measurement you want to load: "))
+        else:
+            choice = index
         selected_subfolder = subfolders[choice]
 
         return self.load_models(selected_subfolder)

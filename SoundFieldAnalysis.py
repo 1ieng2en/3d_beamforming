@@ -107,16 +107,19 @@ class SoundFieldAnalysis:
         S = self.S
         eigVal, eigVec = np.linalg.eig(S)
         # eigVal = np.sqrt(eigVal)
-        en = eigVec[:,1:]*eigVal[1:]
-        b = S-en
+        # b = np.sqrt(np.diag(S))
+        #b = 1/(eigVec[:,1:]*np.sqrt(eigVal[1:]))
+        b = np.sqrt(eigVec[:,0])
 
         eps = cp.Variable()
+        # eps = 0.5
         x = cp.Variable(len(v[2,:]),  nonneg=True)
-        objective = cp.Minimize(cp.sum(x) + 1.3* eps)
-        constraints = [cp.sum_squares(v @ x - b) <= eps, eps >= 0]
+        # objective = cp.Minimize(cp.sum(x) + 10* eps)
+        # constraints = [cp.sum_squares(v @ x - b) <= eps, eps >= 0]
 
-        #objective = cp.Minimize(cp.sum(x))
-        #constraints = [cp.sum_squares(v @ x - b)<=eps]
+        objective = cp.Minimize(cp.sum(x) + eps)
+        # constraints = [cp.sum_squares(v @ x - b)<=eps/10]
+        constraints = [cp.sum_squares(v @ x - b)<=eps]
         prob = cp.Problem(objective, constraints)
 
         # The optimal objective value is returned by `prob.solve()`.
@@ -125,6 +128,7 @@ class SoundFieldAnalysis:
         if prob.status == "optimal":
             optimal_x = x.value
         print("eps:" ,eps.value)
+        print("result s sum:", result)
 
         return optimal_x
 

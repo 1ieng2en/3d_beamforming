@@ -10,7 +10,7 @@ from data_importer import PointCloudManager, DataExtractor
 
 base_folder = "postPCD"  # dir to PCD folders
 manager = PointCloudManager(base_folder)
-pcd_mic, pcd, filtered_pcd = manager.run()
+pcd_mic, pcd, filtered_pcd = manager.run(0)
 
 extractor = DataExtractor('vvs-20kHz-12.8k-1mTOback-rightear.mat')
 recording = extractor.load_data()
@@ -20,9 +20,11 @@ while True:
     if freq_input.lower() == 'n':
         break  
 
-    dynamic_range_input = input("Enter dynamic range (or 'n' to exit): ")
+    # dynamic_range_input = input("Enter dynamic range (or 'n' to exit): ")
+    dynamic_range_input = "20"
 
-    mode = input("enter mode: ")
+    # mode = input("enter mode: ")
+    mode = "CS"
     print("Input done, now calculating")
     print("---------------------------")
 
