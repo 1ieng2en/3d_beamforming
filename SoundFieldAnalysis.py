@@ -109,25 +109,30 @@ class SoundFieldAnalysis:
         # eigVal = np.sqrt(eigVal)
         # b = np.sqrt(np.diag(S))
         #b = 1/(eigVec[:,1:]*np.sqrt(eigVal[1:]))
-        b = np.sqrt(eigVec[:,0])
+        b = eigVec[:,0]*eigVal[0]
+        # b = np.sqrt(self.Pxy[:,self.index])
 
-        eps = cp.Variable()
-        # eps = 0.5
+        # eps = cp.Variable()
+        eps = 1e-5
         x = cp.Variable(len(v[2,:]),  nonneg=True)
         # objective = cp.Minimize(cp.sum(x) + 10* eps)
         # constraints = [cp.sum_squares(v @ x - b) <= eps, eps >= 0]
 
-        objective = cp.Minimize(cp.sum(x) + eps)
+        objective = cp.Minimize(cp.sum(x))
         # constraints = [cp.sum_squares(v @ x - b)<=eps/10]
-        constraints = [cp.sum_squares(v @ x - b)<=eps]
+        # constraints = [cp.norm(v.T@(b - v @ x))<=2]
+        constraints = [cp.norm(b - v @ x)<=2]
+        # constraints = [cp.norm(v.T@(b - v @ x))<=2]
         prob = cp.Problem(objective, constraints)
 
-        # The optimal objective value is returned by `prob.solve()`.
-        result = prob.solve(verbose=True)
+        max_iters = 3000
 
-        if prob.status == "optimal":
-            optimal_x = x.value
-        print("eps:" ,eps.value)
+        # The optimal objective value is returned by `prob.solve()`.
+        result = prob.solve(solver=cp.ECOS, max_iters=max_iters, verbose=True)
+
+        # if prob.status == "optimal":
+        optimal_x = x.value
+        print("eps:" ,eps)
         print("result s sum:", result)
 
         return optimal_x
@@ -168,3 +173,10 @@ class SoundFieldAnalysis:
 
         # Show the point cloud
         plotter.show()
+
+    def plot_and_save():
+        return
+    def CS_muti_cal():
+        return
+    def MUSIC_muti_val():
+        return

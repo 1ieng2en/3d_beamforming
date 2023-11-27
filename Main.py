@@ -21,7 +21,7 @@ while True:
         break  
 
     # dynamic_range_input = input("Enter dynamic range (or 'n' to exit): ")
-    dynamic_range_input = "20"
+    dynamic_range_input = "5"
 
     # mode = input("enter mode: ")
     mode = "CS"
