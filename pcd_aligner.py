@@ -335,7 +335,7 @@ class PointCloud_PreProcessor:
             sphere.translate(point)
                 # if this is the first point, color it red, otherwise, color it white
                 # by tis way it is easier to identify the first point to avoid miss alignment.
-            if i == 0:
+            if i == 0 or i == 1:
                 colors = np.array([[1, 0, 0] for _ in range(len(sphere.vertices))])  # red
                 sphere.vertex_colors = o3d.utility.Vector3dVector(colors)
             
@@ -349,14 +349,18 @@ class PointCloud_PreProcessor:
         self.cpcd = target
         return
     
+    def remove_array(self):
+        self.pcd_crop(pcd="cpcd", title="remove array")
+        return self.cpcd
+    
     def ensure_dir(self, directory):
         if not os.path.exists(directory):
             os.makedirs(directory)
         return
 
         # save the point clouds
-    def save_models(self, models, prefix):
-        directory = f"postPCD/{prefix}"
+    def save_models(self, models, file_to_view):
+        directory = f"{file_to_view}"
         self.ensure_dir(directory)  # ensure the directory exists
         for i, model in enumerate(models):
             filename = f"{directory}/model_{i}.ply"  # change the file name here
@@ -369,12 +373,15 @@ class PointCloud_PreProcessor:
 
     def pcd_write_group(self):
 
-        # get the current time
-        current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # save the first group
-        choice = input("Enter the prefix:")
-        # uncomment the following line if performed ray tracing...
-        self.save_models([self.pcd_mic, self.pcd, self.cpcd], choice+"_"+current_time)
-
-        # save_models([source, target, pcd], choice+"_"+current_time)
+        userinput = input("save this file as new? y/[n]")
+        if userinput == "y":
+            # get the current time
+            current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            # save the first group
+            choice = input("Enter the prefix:")
+            # uncomment the following line if performed ray tracing...
+            self.save_models([self.pcd_mic, self.pcd, self.cpcd], [f"postPCD/{choice}_{current_time}"])
+        else:
+            self.ply_file_path = 'postPCD'
+            file_to_view = self.read_and_choose(filetype='')
+            self.save_models([self.pcd_mic, self.pcd, self.cpcd], file_to_view)

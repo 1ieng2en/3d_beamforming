@@ -78,7 +78,7 @@ class SoundFieldAnalysis:
     def MUSIC(self):
         S = self.S
         eigVal, eigVec = np.linalg.eig(S)
-        E_n = eigVec[:,1:]*eigVal[1:]
+        E_n = np.sqrt(eigVec[:,1:])*eigVal[1:]
         omega = 2*np.pi*self.f[self.index]
         C = 343
         k = omega/C
