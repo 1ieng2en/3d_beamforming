@@ -3,6 +3,8 @@ import scipy.spatial
 from scipy.signal import welch
 import pyvista as pv
 import cvxpy as cp
+import open3d as o3d
+
 
 class SoundFieldAnalysis:
     """
@@ -31,6 +33,9 @@ class SoundFieldAnalysis:
         self.f = 0
         self.plotc = 0
         self.distance = 0
+        self.pcd = pcd
+        self.index = 0
+
 
     def DAS(self, points_subset):
         T = 10
@@ -41,13 +46,13 @@ class SoundFieldAnalysis:
         Pxy = fs / 1.28 * Pxy
 
         index = np.argmin(np.abs(f - self.freq))
+        self.index = index
         C = 343
         omega = 2 * np.pi * f[index]
         k = omega / C
 
         Csm = np.zeros((m, m), dtype=complex)
         distance = scipy.spatial.distance.cdist(self.mic_array, points_subset, metric="euclidean")
-        self.distance = distance
         Vmn = np.zeros((m, m, len(points_subset)), dtype=complex)
         Vmn2 = np.zeros((m, m, len(points_subset)), dtype=complex)
 
@@ -65,35 +70,25 @@ class SoundFieldAnalysis:
         self.S = Csm
         self.Pxy = Pxy
         self.f = f
-        self.index = index
 
-        # under the idea of signal subspace, why not take the eigen value of E to get a better recording?
-        # eigVal, eigVec = np.linalg.eig(Csm)
-        # E_n = eigVec[:,1]*eigVal[1]
-    
         Jup = Csm[:, :, None] * Vmn
-        # Jup = E_n[:, None] @ Vmn
         result = 1 / np.sqrt(36*35) * (np.abs(Jup.sum(axis=(0, 1))) / np.sqrt(Vmn2.sum(axis=(0, 1))))
         return result, f
 
     def MUSIC(self):
         S = self.S
         eigVal, eigVec = np.linalg.eig(S)
-
         E_n = eigVec[:,1:]*eigVal[1:]
-
         omega = 2*np.pi*self.f[self.index]
         C = 343
         k = omega/C
         distance = scipy.spatial.distance.cdist(self.mic_array, self.points, metric="euclidean")
         v = np.exp(-1j * k * distance) / distance
-
         P = []
         for i in range(len(distance[2,:])):
             a = v[:,i]
             Pi =  1/(np.abs(a.conj().T @ E_n @ E_n.conj().T @ a))**2
             P.append(Pi)
-
         return np.array(P)
 
     def CS(self):
@@ -121,7 +116,7 @@ class SoundFieldAnalysis:
         objective = cp.Minimize(cp.sum(x))
         # constraints = [cp.sum_squares(v @ x - b)<=eps/10]
         # constraints = [cp.norm(v.T@(b - v @ x))<=2]
-        constraints = [cp.norm(b - v @ x)<=2]
+        constraints = [1/2*cp.norm(b - v @ x)<=2]
         # constraints = [cp.norm(v.T@(b - v @ x))<=2]
         prob = cp.Problem(objective, constraints)
 
@@ -146,7 +141,7 @@ class SoundFieldAnalysis:
         result_J = np.concatenate(J, axis=0)
         return result_J
 
-    def plot(self, mode = "DAS", dynamic_range=5):
+    def plot(self, mode = "DAS", dynamic_range=5, max_crop = 0):
         if mode == "DAS":
             result_J = self.calculate()
             plotc = 20 * np.log10(np.abs(result_J / 20e-6))
@@ -158,18 +153,32 @@ class SoundFieldAnalysis:
             plotc = 20 * np.log10(np.abs(result_J / 20e-6))
 
         self.plotc = plotc
-        plotc_max = np.max(plotc)
+        plotc_max = np.max(plotc) - max_crop
         plotc_min = plotc_max - dynamic_range
         plotc_clamped = np.clip(plotc, plotc_min, plotc_max)
 
+        self.pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+        radii = [0.001, 0.005, 0.02, 0.04]
+        rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
+            self.pcd, o3d.utility.DoubleVector(radii))
+        
+        vertices = np.asarray(rec_mesh.vertices)
+        faces = np.asarray(rec_mesh.triangles)
+        faces = np.c_[np.full(len(faces), 3), faces]  # Add a column of 3s indicating the number of points per face
+
+        # Create PyVista PolyData from the vertices and faces
+        pv_mesh = pv.PolyData(vertices, faces)
+
+        
         # Assuming self.points are your point coordinates and plotc is the scalar value for each point
-        cloud = pv.PolyData(self.points)
+        # cloud = pv.PolyData(self.points)
+        cloud = pv.PolyData(pv_mesh)
         cloud["Sound Pressure(dB)"] = plotc_clamped  # Adding scalar values to the point cloud
 
         # Create a Plotter object and add the point cloud
         plotter = pv.Plotter()
-        plotter.add_mesh(cloud, cmap='rainbow', scalars='Sound Pressure(dB)', render_points_as_spheres=True, point_size=8)
-        
+        plotter.add_mesh(cloud, cmap='rainbow', scalars='Sound Pressure(dB)',show_scalar_bar = True, point_size = 6, lighting = True, specular = True, specular_power = 100)
+        plotter.enable_depth_peeling(number_of_peels=100, occlusion_ratio=0.1)
 
         # Show the point cloud
         plotter.show()

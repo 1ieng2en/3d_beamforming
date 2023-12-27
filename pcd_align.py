@@ -15,5 +15,3 @@ while True:
     processor.pcd_crop()
     processor.pcd_write()
 
-
-

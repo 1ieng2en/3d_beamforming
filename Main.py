@@ -10,21 +10,27 @@ from data_importer import PointCloudManager, DataExtractor
 
 base_folder = "postPCD"  # dir to PCD folders
 manager = PointCloudManager(base_folder)
-pcd_mic, pcd, filtered_pcd = manager.run(0)
+pcd_mic, pcd, filtered_pcd = manager.run()
 
-extractor = DataExtractor('vvs-20kHz-12.8k-1mTOback-rightear.mat')
+extractor = DataExtractor("HP-side-vvs-0.6m.mat")
+# extractor = DataExtractor("vvs-20kHz-12.8k-1mTOback-rightear.mat")
+
 recording = extractor.load_data()
 
 while True:
     freq_input = input("Enter frequency (or 'n' to exit): ")
     if freq_input.lower() == 'n':
         break  
+    
 
-    # dynamic_range_input = input("Enter dynamic range (or 'n' to exit): ")
-    dynamic_range_input = "5"
+    dynamic_range_input = input("Enter dynamic range (or 'n' to exit): ")
+    # dynamic_range_input = "5"
+    max_value = input("enter crop value from maximum values")
 
-    # mode = input("enter mode: ")
-    mode = "CS"
+
+    mode = input("enter mode: ")
+
+    # mode = "DAS"
     print("Input done, now calculating")
     print("---------------------------")
 
@@ -34,11 +40,13 @@ while True:
     try:
         freq = int(freq_input)
         dynamic_range = int(dynamic_range_input)
+        max_value = int(max_value)
     except ValueError:
         print("Please enter valid integers for frequency and dynamic range.")
+
         continue
 
     BF_analysis = SoundFieldAnalysis(pcd_mic, recording, filtered_pcd, freq=freq)
     BF_analysis.calculate()
-    BF_analysis.plot(mode = mode, dynamic_range=dynamic_range)
+    BF_analysis.plot(mode = mode, dynamic_range=dynamic_range, max_crop = max_value)
     print("finish calculation, close result window to quit or assign new parameters")
