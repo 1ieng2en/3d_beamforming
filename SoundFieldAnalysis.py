@@ -35,9 +35,27 @@ class SoundFieldAnalysis:
         self.distance = 0
         self.pcd = pcd
         self.index = 0
+        self.k = 0
+        self.eigVal = 0
+        self.pv_mesh = None
 
 
-    def DAS(self, points_subset):
+    def get_freq_list(self, freq_range):
+        """
+        Get the list of frequencies available in the sound field data.
+        """
+
+        T = 10
+        N = np.shape(self.sound_field)[1]
+        fs = N / T
+        m, _ = self.sound_field.shape
+        f, _ = welch(self.sound_field, fs, noverlap=0, nperseg=self.nperseg, return_onesided=True, axis=-1)
+        if freq_range is not None:
+            f = f[freq_range[0] <= f]
+            f = f[f <= freq_range[1]]
+        return f
+
+    def calculate_sparse(self):
         T = 10
         N = np.shape(self.sound_field)[1]
         fs = N / T
@@ -47,11 +65,26 @@ class SoundFieldAnalysis:
 
         index = np.argmin(np.abs(f - self.freq))
         self.index = index
+
         C = 343
         omega = 2 * np.pi * f[index]
-        k = omega / C
+        self.k = omega / C
 
         Csm = np.zeros((m, m), dtype=complex)
+        
+        for i in range(m):
+            for j in range(m):
+                if i != j: # diangional removal
+                    Csm[i, j] = np.sqrt(Pxy[i, index]) * np.sqrt(Pxy[j, index])
+        
+        self.S = Csm
+        self.Pxy = Pxy
+        self.f = f
+
+
+    def DAS(self, points_subset):
+        m, _ = self.sound_field.shape
+
         distance = scipy.spatial.distance.cdist(self.mic_array, points_subset, metric="euclidean")
         Vmn = np.zeros((m, m, len(points_subset)), dtype=complex)
         Vmn2 = np.zeros((m, m, len(points_subset)), dtype=complex)
@@ -59,26 +92,37 @@ class SoundFieldAnalysis:
         for i in range(m):
             for j in range(m):
                 if i != j: # diangional removal
-                    Csm[i, j] = np.sqrt(Pxy[i, index]) * np.sqrt(Pxy[j, index])
                     rm = distance[i]
                     rn = distance[j]
-                    vm = np.exp(-1j * k * rm) / rm
-                    vn = np.exp(-1j * k * rn) / rn
+                    vm = np.exp(-1j * self.k * rm) / rm
+                    vn = np.exp(-1j * self.k * rn) / rn
                     Vmn[i, j, :] = vm * np.conj(vn)
                     Vmn2[i, j, :] = np.abs(vm) ** 2 * np.abs(vn) ** 2
 
-        self.S = Csm
-        self.Pxy = Pxy
-        self.f = f
-
-        Jup = Csm[:, :, None] * Vmn
+        Jup = self.S[:, :, None] * Vmn
         result = 1 / np.sqrt(36*35) * (np.abs(Jup.sum(axis=(0, 1))) / np.sqrt(Vmn2.sum(axis=(0, 1))))
-        return result, f
+        return result, self.f
+    
+    def MUSIC_gen_eig(self, eigVal, eigVec, signal_number):
+        idx = []
+        eigVal_copy = eigVal.copy()  # create a copy of eigVal
 
-    def MUSIC(self):
+        for i in range(signal_number):
+            idx_largest = np.argmax(eigVal_copy)
+            eigVal_copy[idx_largest] = -np.inf  # note the largest value
+            idx.append(idx_largest)
+
+        eigVal = np.delete(eigVal, np.array(idx))
+        eigVec = np.delete(eigVec, np.array(idx), axis=1)
+        
+        return eigVal, eigVec
+
+    def MUSIC(self, signal_number):
         S = self.S
         eigVal, eigVec = np.linalg.eig(S)
-        E_n = np.sqrt(eigVec[:,1:])*eigVal[1:]
+        eigVal, eigVec = self.MUSIC_gen_eig(eigVal, eigVec, signal_number)
+
+        E_n = ((eigVec)*eigVal)
         omega = 2*np.pi*self.f[self.index]
         C = 343
         k = omega/C
@@ -90,7 +134,7 @@ class SoundFieldAnalysis:
             Pi =  1/(np.abs(a.conj().T @ E_n @ E_n.conj().T @ a))**2
             P.append(Pi)
         return np.array(P)
-
+    
     def CS(self):
 
         omega = 2*np.pi*self.f[self.index]
@@ -108,82 +152,209 @@ class SoundFieldAnalysis:
         # b = np.sqrt(self.Pxy[:,self.index])
 
         # eps = cp.Variable()
-        eps = 1e-5
+        eps = 1e-3
         x = cp.Variable(len(v[2,:]),  nonneg=True)
         # objective = cp.Minimize(cp.sum(x) + 10* eps)
-        # constraints = [cp.sum_squares(v @ x - b) <= eps, eps >= 0]
+        # constraints = [cp.norm(v @ x - b) <= eps]
+        # Introduce a new variable for the maximum value of x
+        x_max = cp.Variable()
 
         objective = cp.Minimize(cp.sum(x))
         # constraints = [cp.sum_squares(v @ x - b)<=eps/10]
         # constraints = [cp.norm(v.T@(b - v @ x))<=2]
-        constraints = [1/2*cp.norm(b - v @ x)<=2]
+        constraints = [cp.norm(b - v @ x)<=0.1, 
+                        x <= x_max,                         # Every element of x is less than or equal to x_max
+                        x_max >= 20e-6,                    # Your constraint on the maximum level of x
+                        ]
         # constraints = [cp.norm(v.T@(b - v @ x))<=2]
+        ##########################
+        N = v.shape[1]  # Number of columns in v
+        select = cp.Variable([N,1], boolean=True)  # Binary selection variable
+
+        # Objective and other constraints
+        # ...
+
+        # Add selection constraints
+        constraints += [cp.sum(select) == 1]  # Only one column is selected
+
+        # Formulate the constraint using the selected column
+        # select_column = cp.reshape(select, (N, 1))
+
+        selected_column = v * select  # This will result in a weighted sum of the columns, effectively selecting one.
+
+        selected_column = cp.sum(selected_column, axis=1)
+
+        constraints += [cp.norm(b - selected_column * x_max) <= 20e-4]
+
+        # Define and solve the problem (use a MIP-compatible solver)
         prob = cp.Problem(objective, constraints)
+        result = prob.solve(solver=cp.ECOS_BB)  # Example of a MIP-compatible solver
+
+###############################################
+
+
+        #prob = cp.Problem(objective, constraints)
 
         max_iters = 3000
 
         # The optimal objective value is returned by `prob.solve()`.
-        result = prob.solve(solver=cp.ECOS, max_iters=max_iters, verbose=True)
-
+        # result = prob.solve(solver=cp.SCS, max_iters=max_iters, verbose=True, eps = 1e-5)
+        #result = prob.solve(solver=cp.SCS, verbose=True, eps = 1e-5)
+#####################################
         # if prob.status == "optimal":
         optimal_x = x.value
+        max_x = x_max.value
         print("eps:" ,eps)
         print("result s sum:", result)
+        print("maxmum x:", max_x)
 
         return optimal_x
 
-    def calculate(self):
+    def calculate_splice(self, mode = "DAS"):
+        """
+        Calculate sound pressure with spliced point cloud. For large point clouds, the calculation can improve the performance.
+        """
         split_points = np.array_split(self.points, np.round(self.points.shape[0] / self.seg_size))
         J = []
-        for splitP in split_points:
-            Js, _ = self.DAS(splitP)
-            J.append(Js)
-        result_J = np.concatenate(J, axis=0)
+        if mode == "DAS":
+            for splitP in split_points:
+                Js, _ = self.DAS(splitP)
+                J.append(Js)
+            result_J = np.concatenate(J, axis=0)
         return result_J
 
-    def plot(self, mode = "DAS", dynamic_range=5, max_crop = 0):
+    
+    def create_mesh_from_grid(self, points, rows, cols):
+        # Initialize lists for triangles and vertices
+        vertices = points
+        triangles = []
+
+        # Create two triangles for each grid cell
+        for i in range(rows - 1):
+            for j in range(cols - 1):
+                idx = i * cols + j
+                triangles.append([idx, idx + cols, idx + 1])
+                triangles.append([idx + 1, idx + cols, idx + cols + 1])
+
+        # Create the mesh
+        pv_mesh = pv.PolyData(vertices, triangles)
+        return pv_mesh
+    
+    def add_slicer(self, plotter, mode, p_range, center = [0,0], dynamic_range= 5, max_crop = 0, plane="xy", position=0, size=[1, 1], density=100, plot_mesh = True):
+        # Create a meshgrid for the specified plane
+        x = np.linspace(center[0]-size[0]/2, center[0]+size[0]/2, density)
+        y = np.linspace(center[1]-size[1]/2, center[1]+size[1]/2, density)
+        xx, yy = np.meshgrid(x, y)
+
+        # Generate points based on the specified plane
+        if plane == "xy":
+            points = np.vstack((xx.flatten(), yy.flatten(), np.full_like(xx.flatten(), position))).T
+        elif plane == "yz":
+            points = np.vstack((np.full_like(xx.flatten(), position), xx.flatten(), yy.flatten())).T
+        elif plane == "xz":
+            points = np.vstack((xx.flatten(), np.full_like(xx.flatten(), position), yy.flatten())).T
+        else:
+            print(f"Invalid plane: {plane}")
+            return None
+        
+        temppoints = self.points # temporary store the points
+
+        try:
+            self.points = points # replace the points with the plane points, for calculation
+            if plot_mesh:
+                pcd = o3d.geometry.PointCloud()
+                pcd.points = o3d.utility.Vector3dVector(points)
+                pv_mesh = self.gen_mesh(pcd)
+                cloud = pv.PolyData(pv_mesh)
+            else:
+                cloud = pv.PolyData(points)
+
+            plotc = self.gen_result(mode)
+            if p_range is None:
+                plotc_clamped, p_range = self.clamp(plotc, dynamic_range, max_crop)
+            else:
+                plotc_clamped = np.clip(plotc, p_range[0], p_range[1])
+            cloud["Sound Pressure(dB)"] = plotc_clamped
+            plotter.add_mesh(cloud, cmap='rainbow', scalars='Sound Pressure(dB)',show_scalar_bar = True,  opacity="linear")
+        finally:
+            self.points = temppoints # restore the points
+        return plotter, cloud
+    
+    def gen_result(self, mode):
         if mode == "DAS":
-            result_J = self.calculate()
+            result_J = self.calculate_splice(mode = "DAS")
             plotc = 20 * np.log10(np.abs(result_J / 20e-6))
-        elif mode == "MUSIC":
-            result_J = self.MUSIC()
+        elif mode.startswith("MUSIC"):
+            result_J = self.MUSIC(signal_number=int(mode[-1]))
             plotc = 20 * np.log10(np.abs(result_J / 20e-6))
         elif mode == "CS":
             result_J = self.CS()
             plotc = 20 * np.log10(np.abs(result_J / 20e-6))
+        return plotc
+    
+    
+    def clamp(self, plotc, dynamic_range, max_crop):
 
-        self.plotc = plotc
         plotc_max = np.max(plotc) - max_crop
         plotc_min = plotc_max - dynamic_range
         plotc_clamped = np.clip(plotc, plotc_min, plotc_max)
+        return plotc_clamped, [plotc_min, plotc_max]
 
-        self.pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
-        radii = [0.001, 0.005, 0.02, 0.04]
-        rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
-            self.pcd, o3d.utility.DoubleVector(radii))
+    def plot(self, plotc, dynamic_range=5, max_crop = 0, plot_mesh = True, opacity=None):
+        """
+        Plot the sound field in 3D.
+        """
+        plotc_clamped, p_range = self.clamp(plotc, dynamic_range, max_crop)
         
+        if plot_mesh:
+            if self.pv_mesh is None:
+                self.pv_mesh = self.gen_mesh(self.pcd)
+            cloud = pv.PolyData(self.pv_mesh)
+        else:
+            cloud = pv.PolyData(self.points)
+
+        cloud["Sound Pressure(dB)"] = plotc_clamped  # Adding scalar values to the point cloud
+
+        # Create a Plotter object and add the point cloud
+        plotter = pv.Plotter()
+        plotter.add_mesh(cloud, cmap='rainbow', scalars='Sound Pressure(dB)',show_scalar_bar = True, point_size = 6, opacity=opacity)
+        # Show the point cloud
+        return plotter, p_range
+    
+    
+    def gen_mesh(self, pcd):
+        
+        # variables for ball size, [lowest dimention, highest dimention, average dimention(starting point), increment]
+
+        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+        radii = [0.0005, 0.004, 0.001, 0.001]
+        rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pcd, o3d.utility.DoubleVector(radii))
+        
+        # rec_mesh, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=9)
+        # rec_mesh = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, voxel_size=0.001)
+
         vertices = np.asarray(rec_mesh.vertices)
         faces = np.asarray(rec_mesh.triangles)
         faces = np.c_[np.full(len(faces), 3), faces]  # Add a column of 3s indicating the number of points per face
 
         # Create PyVista PolyData from the vertices and faces
         pv_mesh = pv.PolyData(vertices, faces)
+        return pv_mesh
 
+    def temp_save():
+        """save the result to a temporary file, the file name will be the parameter of the method
+        file name: model + mode + freq
+        filepath: temp/"""
+
+        filepath = "temp/"
         
-        # Assuming self.points are your point coordinates and plotc is the scalar value for each point
-        # cloud = pv.PolyData(self.points)
-        cloud = pv.PolyData(pv_mesh)
-        cloud["Sound Pressure(dB)"] = plotc_clamped  # Adding scalar values to the point cloud
+        
 
-        # Create a Plotter object and add the point cloud
-        plotter = pv.Plotter()
-        plotter.add_mesh(cloud, cmap='rainbow', scalars='Sound Pressure(dB)',show_scalar_bar = True, point_size = 6, lighting = True, specular = True, specular_power = 100)
-        plotter.enable_depth_peeling(number_of_peels=100, occlusion_ratio=0.1)
 
-        # Show the point cloud
-        plotter.show()
-
-    def plot_and_save():
+        return
+    def result_save():
+        return
+    def DAS_muti_cal():
         return
     def CS_muti_cal():
         return

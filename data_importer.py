@@ -8,13 +8,14 @@ import numpy as np
 class PointCloudManager:
     def __init__(self, base_folder):
         self.base_folder = base_folder
+        self.directory = None
 
     def list_subfolders(self):
         return [f.name for f in os.scandir(self.base_folder) if f.is_dir()]
 
     def load_models(self, subfolder):
-        directory = f"{self.base_folder}/{subfolder}"
-        model_files = sorted(glob.glob(f"{directory}/model_*.ply"))
+        self.directory = f"{self.base_folder}/{subfolder}"
+        model_files = sorted(glob.glob(f"{self.directory}/model_*.ply"))
 
         if len(model_files) < 3:
             print("Not enough model files found in the folder.")

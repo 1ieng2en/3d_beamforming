@@ -19,6 +19,7 @@ class PointCloud_PreProcessor:
         self.vis = None
         self.cpcd = None
         self.pcd_mic = None
+        self.mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5)
 
     def pcd_read(self):
         file_path = self.ply_file_path + 'kf_output.ply'
@@ -79,12 +80,13 @@ class PointCloud_PreProcessor:
         # Get the picked points and the cropped geometry
         if save:
             self.cpcd = vis.get_cropped_geometry()
+            self.vis = vis
 
-        picked_points = vis.get_picked_points()
+        # picked_points = vis.get_picked_points()
         # Print coordinates of the picked points
-        for i, idx in enumerate(picked_points):
-            print(f"Point #{i + 1}: Index({idx}) - Coordinates {np.asarray(self.pcd.points)[idx]}")
-        self.vis = vis
+        #for i, idx in enumerate(picked_points):
+        #    print(f"Point #{i + 1}: Index({idx}) - Coordinates {np.asarray(self.pcd.points)[idx]}")
+
         return self.cpcd
 
     def pcd_write(self):
@@ -110,7 +112,7 @@ class PointCloud_PreProcessor:
             pcd = self.cpcd
         if pcd == "mic":
             pcd = self.pcd_mic + self.cpcd
-        o3d.visualization.draw_geometries([pcd]) # visualize the point cloud
+        o3d.visualization.draw_geometries([self.mesh_frame, pcd]) # visualize the point cloud
         return
 
 ##############################################################################################################
@@ -195,6 +197,8 @@ class PointCloud_PreProcessor:
     def apply_translation(self, pcd, origin):
         """ apply translation based on user-selected points """
         pcd.translate(-origin)
+        return pcd
+    
     def create_plane_mesh(self, z):
         """ create a mesh plane """
         # defin vertices
@@ -236,14 +240,9 @@ class PointCloud_PreProcessor:
 
 ##############################################################################################################
 # Align point cloud coordinates
+    
+    def rotate_to_view(self):
         
-    def coordinates_align(self):
-        """ Align point cloud coordinates and regulize the point cloud default view direction"""
-
-        # ask user to pick points
-        picked_points = self.pick_points_and_get_coordinates()
-        print(f"Picked points: {picked_points}")
-
         # Extract data from clipboard
         lookat, front, up = self.extract_clipboard_data()
 
@@ -256,21 +255,27 @@ class PointCloud_PreProcessor:
 
         # Apply transformations and visualize the result
         self.cpcd = self.apply_transformations(self.cpcd, lookat, rotation_matrix)
+        
+    def coordinates_align(self):
+        """ Align point cloud coordinates and regulize the point cloud default view direction"""
+
+        # ask user to pick points
+        picked_points = self.pick_points_and_get_coordinates()
+        print(f"Picked points: {picked_points}")
 
         if len(picked_points) == 3:
             # create plane mesh
-            plane_mesh = self.create_plane_mesh(0)
-            plane_mesh.paint_uniform_color([0.5, 0.5, 0.5])  # grey
+            # plane_mesh = self.create_plane_mesh(0)
+            # plane_mesh.paint_uniform_color([0.5, 0.5, 0.5])  # grey
             # apply rotation
             origin = self.apply_rotation(self.cpcd, picked_points)
             # apply translation
-            self.apply_translation(self.cpcd, origin)
-            mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5)
-            o3d.visualization.draw_geometries([self.cpcd, mesh_frame])
+            self.cpcd = self.apply_translation(self.cpcd, origin)
+            o3d.visualization.draw_geometries([self.cpcd, self.mesh_frame])
 
         else:
             print("need 3 points to align")
-        return self.cpcd
+        return self.cpcd, picked_points
     
 ##############################################################################################################
 # align array with point cloud
@@ -369,7 +374,6 @@ class PointCloud_PreProcessor:
                 print(f"Model saved as {filename}")
             except Exception as e:
                 print(f"Failed to save {filename}: {e}")
-
 
     def pcd_write_group(self):
 
