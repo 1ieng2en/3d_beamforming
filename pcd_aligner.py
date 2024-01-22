@@ -54,7 +54,7 @@ class PointCloud_PreProcessor:
         return file_to_view
 
 
-    def pcd_crop(self, pcd = None, title = "Point Cloud Cropping", save = True):
+    def pcd_crop(self, pcd = None, title = "Point Cloud Cropping", save = True, mesh_frame = None):
         """
         Allows user to pick points from the point cloud and returns the cropped point cloud.
         """
@@ -72,8 +72,20 @@ class PointCloud_PreProcessor:
         if pcd == "cpcd":
             pcd = self.cpcd
         vis = o3d.visualization.VisualizerWithEditing()
+
         vis.create_window(window_name = title)
-        vis.add_geometry(pcd)
+        if mesh_frame is not None:
+            mesh_frame = np.array(self.mesh_frame.vertices)
+            mesh_frame_pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(mesh_frame))
+
+
+            combined_points = np.concatenate((np.asarray(pcd.points), np.asarray(mesh_frame_pcd.points)), axis=0)
+            combined_pcd = o3d.geometry.PointCloud()
+            combined_pcd.points = o3d.utility.Vector3dVector(combined_points)
+
+            vis.add_geometry(combined_pcd)
+        else:
+            vis.add_geometry(pcd)
         vis.run()  # user picks points
         vis.destroy_window()
 
@@ -87,7 +99,7 @@ class PointCloud_PreProcessor:
         #for i, idx in enumerate(picked_points):
         #    print(f"Point #{i + 1}: Index({idx}) - Coordinates {np.asarray(self.pcd.points)[idx]}")
 
-        return self.cpcd
+        return vis.get_cropped_geometry()
 
     def pcd_write(self):
         # Saving the mesh into current path, naming by time
@@ -111,7 +123,7 @@ class PointCloud_PreProcessor:
         if pcd == "cpcd":
             pcd = self.cpcd
         if pcd == "mic":
-            pcd = self.pcd_mic + self.cpcd
+            pcd = self.pcd_mic
         o3d.visualization.draw_geometries([self.mesh_frame, pcd]) # visualize the point cloud
         return
 
@@ -301,13 +313,13 @@ class PointCloud_PreProcessor:
 
 ##############################################################################################################
 
-    def array_align(self):
+    def array_align(self, model_mic):
         source = self.pcd_mic
-        target = self.cpcd
+        target = model_mic
 
-        self.pcd_crop(pcd = target, title="choose 3 points on the pcd")
+        self.pcd_crop(pcd = target, title="choose 3 points on the pcd", mesh_frame= None)
         picked_id_target = self.vis.get_picked_points()
-        self.pcd_crop(pcd = source, title = "choose 3 corrsponding points on the array", save = False)
+        self.pcd_crop(pcd = source, title = "choose 3 corrsponding points on the array", save = False, mesh_frame= True)
         picked_id_source = self.vis.get_picked_points()
 
         assert (len(picked_id_source) >= 3 and len(picked_id_target) >= 3)
@@ -323,7 +335,7 @@ class PointCloud_PreProcessor:
 
         # point-to-point ICP for refinement
         print("Perform point-to-point ICP refinement")
-        threshold = 0.03  # 3cm distance threshold
+        threshold = 0.003  # 0.3cm distance threshold
         reg_p2p = o3d.pipelines.registration.registration_icp(
             source, target, threshold, trans_init,
             o3d.pipelines.registration.TransformationEstimationPointToPoint())
@@ -331,6 +343,30 @@ class PointCloud_PreProcessor:
         transformation = reg_p2p.transformation
 
         source.transform(transformation)
+
+        spheres = []
+        # create a sphere for each point in the point cloud
+        for i, point in enumerate(np.asarray(source.points)):
+            sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)  # set radius
+            sphere.translate(point)
+                # if this is the first point, color it red, otherwise, color it white
+                # by tis way it is easier to identify the first point to avoid miss alignment.
+            if i == 0 or i == 1:
+                colors = np.array([[1, 0, 0] for _ in range(len(sphere.vertices))])  # red
+                sphere.vertex_colors = o3d.utility.Vector3dVector(colors)
+            
+            spheres.append(sphere)
+
+        o3d.visualization.draw_geometries(spheres + [target])  # draw all spheres and target point cloud
+
+        self.pcd_mic = source
+        self.cpcd = target
+        return
+
+    def pcd_show_highlight(self):
+
+        source = self.pcd_mic
+        target = self.cpcd
 
         spheres = []
 
@@ -349,9 +385,6 @@ class PointCloud_PreProcessor:
         o3d.visualization.draw_geometries(spheres + [target])  # draw all spheres and target point cloud
 
         # o3d.visualization.draw_geometries([mesh, target])
-
-        self.pcd_mic = source
-        self.cpcd = target
         return
     
     def remove_array(self):
@@ -384,7 +417,7 @@ class PointCloud_PreProcessor:
             # save the first group
             choice = input("Enter the prefix:")
             # uncomment the following line if performed ray tracing...
-            self.save_models([self.pcd_mic, self.pcd, self.cpcd], [f"postPCD/{choice}_{current_time}"])
+            self.save_models([self.pcd_mic, self.pcd, self.cpcd], f"postPCD/{choice}_{current_time}")
         else:
             self.ply_file_path = 'postPCD'
             file_to_view = self.read_and_choose(filetype='')
