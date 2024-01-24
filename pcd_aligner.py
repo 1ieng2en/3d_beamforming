@@ -77,8 +77,6 @@ class PointCloud_PreProcessor:
         if mesh_frame is not None:
             mesh_frame = np.array(self.mesh_frame.vertices)
             mesh_frame_pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(mesh_frame))
-
-
             combined_points = np.concatenate((np.asarray(pcd.points), np.asarray(mesh_frame_pcd.points)), axis=0)
             combined_pcd = o3d.geometry.PointCloud()
             combined_pcd.points = o3d.utility.Vector3dVector(combined_points)
@@ -92,7 +90,7 @@ class PointCloud_PreProcessor:
         # Get the picked points and the cropped geometry
         if save:
             self.cpcd = vis.get_cropped_geometry()
-            self.vis = vis
+        self.vis = vis
 
         # picked_points = vis.get_picked_points()
         # Print coordinates of the picked points
@@ -313,9 +311,9 @@ class PointCloud_PreProcessor:
 
 ##############################################################################################################
 
-    def array_align(self, model_mic):
+    def array_align(self):
         source = self.pcd_mic
-        target = model_mic
+        target = self.cpcd
 
         self.pcd_crop(pcd = target, title="choose 3 points on the pcd", mesh_frame= None)
         picked_id_target = self.vis.get_picked_points()
@@ -335,33 +333,26 @@ class PointCloud_PreProcessor:
 
         # point-to-point ICP for refinement
         print("Perform point-to-point ICP refinement")
-        threshold = 0.003  # 0.3cm distance threshold
-        reg_p2p = o3d.pipelines.registration.registration_icp(
-            source, target, threshold, trans_init,
-            o3d.pipelines.registration.TransformationEstimationPointToPoint())
+        # threshold = 0.03  # 3cm distance threshold
+        #reg_p2p = o3d.pipelines.registration.registration_icp(
+        #    source, target, threshold, trans_init,
+        #    o3d.pipelines.registration.TransformationEstimationPointToPoint())
 
-        transformation = reg_p2p.transformation
+        # transformation = reg_p2p.transformation
 
-        source.transform(transformation)
-
+        #source.transform(transformation)
+        source.transform(trans_init)
         spheres = []
-        # create a sphere for each point in the point cloud
-        for i, point in enumerate(np.asarray(source.points)):
-            sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)  # set radius
-            sphere.translate(point)
-                # if this is the first point, color it red, otherwise, color it white
-                # by tis way it is easier to identify the first point to avoid miss alignment.
-            if i == 0 or i == 1:
-                colors = np.array([[1, 0, 0] for _ in range(len(sphere.vertices))])  # red
-                sphere.vertex_colors = o3d.utility.Vector3dVector(colors)
-            
-            spheres.append(sphere)
-
-        o3d.visualization.draw_geometries(spheres + [target])  # draw all spheres and target point cloud
 
         self.pcd_mic = source
         self.cpcd = target
         return
+
+    def paint_uniform_color(self, pcd = None, color = [0.5, 0.5, 0.5]):
+        if pcd is None:
+            pcd = self.cpcd
+        pcd.paint_uniform_color(color)
+        return pcd
 
     def pcd_show_highlight(self):
 
