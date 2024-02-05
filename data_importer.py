@@ -4,9 +4,12 @@ import glob
 import open3d as o3d
 import scipy.io
 import numpy as np
+from bf3d_prep import FolderSelector
+
+
 
 class PointCloudManager:
-    def __init__(self, base_folder):
+    def __init__(self, base_folder = "postPCD"):
         self.base_folder = base_folder
         self.directory = None
 
@@ -14,8 +17,8 @@ class PointCloudManager:
         return [f.name for f in os.scandir(self.base_folder) if f.is_dir()]
 
     def load_models(self, subfolder):
-        self.directory = f"{self.base_folder}/{subfolder}"
-        model_files = sorted(glob.glob(f"{self.directory}/model_*.ply"))
+
+        model_files = sorted(glob.glob(f"{subfolder}/model_*.ply"))
 
         if len(model_files) < 3:
             print("Not enough model files found in the folder.")
@@ -43,6 +46,8 @@ class PointCloudManager:
         else:
             choice = index
         selected_subfolder = subfolders[choice]
+
+        print(f"Loading measurement {selected_subfolder}...")
 
         return self.load_models(selected_subfolder)
 

@@ -4,6 +4,10 @@ from scipy.signal import welch
 import pyvista as pv
 import cvxpy as cp
 import open3d as o3d
+from numpy import ndarray
+import pcd_aligner
+
+
 
 
 class SoundFieldAnalysis:
@@ -21,7 +25,7 @@ class SoundFieldAnalysis:
     nperseg (int): Number of data points per segment for FFT calculation.
     """
 
-    def __init__(self, mic_pcd, sound_field, pcd, freq=6000, seg_size=2000, nperseg=1600):
+    def __init__(self, mic_pcd, sound_field, pcd, freq, seg_size=2000, nperseg=1600):
         self.mic_pcd = mic_pcd
         self.mic_array = np.array(self.mic_pcd.points)
         self.sound_field = sound_field
@@ -39,14 +43,24 @@ class SoundFieldAnalysis:
         self.k = 0
         self.eigVal = 0
         self.pv_mesh = None
+        self.origional_mic_pcd = None
 
 
-    def get_freq_list(self, freq_range):
+    def load_mic_array(self):
+        """
+        Load the microphone array.
+        """
+        cpcd_path = f"../data/pcd/pcd_mic.pcd"
+        processor = pcd_aligner.PointCloud_PreProcessor(cpcd_path)
+        processor.load_mic_array()
+        self.origional_mic_pcd = np.array(processor.pcd_mic.points)
+
+
+    def get_freq_list(self, freq_range, T = 10):
         """
         Get the list of frequencies available in the sound field data.
         """
 
-        T = 10
         N = np.shape(self.sound_field)[1]
         fs = N / T
         f, Pxy = welch(self.sound_field, fs, noverlap=0, nperseg=self.nperseg, return_onesided=True, axis=-1)
@@ -60,18 +74,19 @@ class SoundFieldAnalysis:
         self.f = f
         return f
 
-    def calculate_sparse(self, freq_range = None):
+    def calculate_sparse(self, freq_range = None, T = 10):
         """
         Calculate the sparse matrix.
         under the frequency range mode, you don't need to run this method in the loop, run the get_freq_list() method instead.
         """
-        T = 10
+        
         N = np.shape(self.sound_field)[1]
         fs = N / T
         f, Pxy = welch(self.sound_field, fs, noverlap=0, nperseg=self.nperseg, return_onesided=True, axis=-1)
         Pxy = fs / 1.28 * Pxy
         self.Pxy = np.array(Pxy)
         self.f = f
+        self.load_mic_array()
 
         if freq_range is not None:
             f = f[freq_range[0] <= f]
@@ -99,26 +114,94 @@ class SoundFieldAnalysis:
                     Csm[i, j] = np.sqrt(self.Pxy[i, index]) * np.sqrt(self.Pxy[j, index])
         self.S = Csm
 
+    
+    def find_transformed_origin(self, original_points, transformed_points):
+        """
+        Find the transformed coordinates of the origin given sets of original and transformed points.
+        
+        :param original_points: np.array of shape (n, 3) representing n original points.
+        :param transformed_points: np.array of shape (n, 3) representing n transformed points.
+        :return: The coordinates of the transformed origin point.
+        """
+        # Ensure the points are in correct shape
+        if original_points.shape != transformed_points.shape or original_points.shape[1] != 3:
+            raise ValueError("Both sets of points must have the same shape and be 3-dimensional.")
+
+        # Calculate the centroids of the point sets
+        centroid_original = np.mean(original_points, axis=0)
+        centroid_transformed = np.mean(transformed_points, axis=0)
+
+        # Center the points around the centroids
+        centered_original = original_points - centroid_original
+        centered_transformed = transformed_points - centroid_transformed
+
+        # Compute the rotation matrix using SVD
+        H = np.dot(centered_transformed.T, centered_original)
+        U, S, Vt = np.linalg.svd(H)
+        rotation_matrix = np.dot(U, Vt)
+
+        # Compute the translation vector
+        translation_vector = centroid_transformed - np.dot(rotation_matrix, centroid_original)
+
+        # Apply the transformation to the origin (0,0,0)
+        transformed_origin = np.dot(rotation_matrix, [0, 0, 0]) + translation_vector
+
+        return transformed_origin
+
+
     def DAS(self, points_subset):
         m, _ = self.sound_field.shape
 
-        distance = scipy.spatial.distance.cdist(self.mic_array, points_subset, metric="euclidean")
+        # calculate the transformed origin
+        transformed_origin = self.find_transformed_origin(self.origional_mic_pcd[0:2, :], self.mic_array[0:2, :])
+        # calculate the distance from the origin to the focus points
+        r = scipy.spatial.distance.cdist([transformed_origin], points_subset, metric="euclidean")
+        # calculate the distance from the mic array to individual microphone points
+        rmic = scipy.spatial.distance.cdist([transformed_origin], self.mic_array, metric="euclidean")
+
+        rmr = scipy.spatial.distance.cdist(self.mic_array, points_subset, metric="euclidean")
+        vm = np.exp(-1j * self.k * rmri)/rmri
+
+        rv = np.abs(rmic.T - r)
+
         Vmn = np.zeros((m, m, len(points_subset)), dtype=complex)
         Vmn2 = np.zeros((m, m, len(points_subset)), dtype=complex)
 
         for i in range(m):
             for j in range(m):
                 if i != j: # diangional removal
-                    rm = distance[i]
-                    rn = distance[j]
-                    vm = np.exp(-1j * self.k * rm) / rm
-                    vn = np.exp(-1j * self.k * rn) / rn
-                    Vmn[i, j, :] = vm * np.conj(vn)
-                    Vmn2[i, j, :] = (np.abs(vm) ** 2) * (np.abs(vn) ** 2)
+                    #calculate the individual distance
+                    rmri = rmr[i]
+                    rmrj = rmr[j]
+                    
+                    # calculate steering vector
+                    vm = np.exp(-1j * self.k * rmri)/rmri
+                    vn = np.exp(-1j * self.k * rmrj)/rmrj
+                    # calculate the sterring vector matrix
+                    Vmn[i, j, :] = vm * vn.conj()
+                    #Vmn2[i, j, :] = (np.real(vm) ** 2) * (np.real(vn) ** 2)
+                    # Vmn2[i, j, :] = np.conj(vm) * vn
+                    Vmn2[i, j, :] = (1/rmri)**2 * (1/rmrj)**2
+                    # Vmn2[i, j, :] = (vm ** 2) * (vn ** 2)
 
-        Jup = self.S[:, :, None] * Vmn
-        result = 1 / np.sqrt(36*35) * (np.abs(Jup.sum(axis=(0, 1))) / np.sqrt(Vmn2.sum(axis=(0, 1))))
+        # calculate the sound pressure
+        #h = (Vmn)
+        #g = self.S[:,:,None]
+        #J4 = np.sum(( h.swapaxes(1, 0).conj() * g )**2, axis=(0, 1)) / np.sum((h.swapaxes(1,0).conj() * h), axis=(0, 1))
+        
+        # J4 = ( h.swapaxes(1, 0).conj() * g )**2 / h.swapaxes(1,0).conj() @ h
+        Jup = self.S[:, :, None] * (Vmn)
+
+        #Vmn2_real = np.sqrt(np.real(Vmn2))
+        #Vmn2_imag = np.sqrt(np.imag(Vmn2))
+        result = 1 / np.sqrt(12*11) * (Jup.sum(axis=(0, 1))) / (np.sqrt(Vmn2.sum(axis=(0, 1))))
+
+        #result = 1 / np.sqrt(36*35) * ((Jup.sum(axis=(0, 1))) / ((Vmn2_real+1j*Vmn2_imag).sum(axis=(0, 1))))
+        # result = 1 / np.sqrt(36*35) * np.real(Jup.sum(axis=(0, 1)))
+        # result = 1 / np.sqrt(36*35) * ((Jup.sum(axis=(0, 1))) / (Vmn2.sum(axis=(0, 1))))
         return result, self.f
+
+
     
     def MUSIC_gen_eig(self, eigVal, eigVec, signal_number):
         idx = []
@@ -134,6 +217,16 @@ class SoundFieldAnalysis:
         
         return eigVal, eigVec
 
+    def pseudo_distance(self, points_subset):
+        '''
+        Calculate the pseudo distance
+        The distance is calculated by the distance to the mic array center - micarray center to individual mic
+        '''
+        m, _ = self.sound_field.shape
+        distance = scipy.spatial.distance.cdist(self.mic_array, points_subset, metric="euclidean")
+
+    
+
     def MUSIC(self, signal_number):
         S = self.S
         eigVal, eigVec = np.linalg.eig(S)
@@ -148,12 +241,12 @@ class SoundFieldAnalysis:
         P = []
         for i in range(len(distance[2,:])):
             a = v[:,i]
-            Pi =  1/(np.abs(a.conj().T @ E_n @ E_n.conj().T @ a))**2
+            Pi =  1/((a.conj().T @ E_n @ E_n.conj().T @ a))**2
             P.append(Pi)
         return np.array(P)
 
-    
-    
+
+
     def CS(self,**kwargs):
         '''
         Compressive sensing method
@@ -357,7 +450,7 @@ class SoundFieldAnalysis:
             else:
                 cloud = pv.PolyData(points)
 
-            plotc = self.gen_result(mode)
+            plotc, _ = self.gen_result(mode)
             if p_range is None:
                 plotc_clamped, p_range = self.clamp(plotc, dynamic_range, max_crop)
             else:
@@ -375,6 +468,7 @@ class SoundFieldAnalysis:
         initial_x: initial value of x
         eps: the value of eps
         frequency range: the frequency range of the result'''
+
         if mode == "DAS":
             result_J = self.calculate_splice(mode = "DAS")
             plotc = 20 * np.log10(np.real(result_J / 20e-6))
@@ -428,10 +522,10 @@ class SoundFieldAnalysis:
     
     def gen_mesh(self, pcd):
         
-        # variables for ball size, [lowest dimention, highest dimention, average dimention(starting point), increment]
+        # variables for ball size, [lowest dimention, highest dimention, average dimention(starting point), increment, unit: m]
 
         pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
-        radii = [0.0005, 0.004, 0.001, 0.001]
+        radii = [0.0005, 0.006, 0.001, 0.0005]
         rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pcd, o3d.utility.DoubleVector(radii))
         
         # rec_mesh, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=9)

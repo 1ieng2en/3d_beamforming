@@ -1,0 +1,49 @@
+﻿  main.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 453 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  kinfu_example.vcxproj -> C:\ZIM\MasterThesisProject\Stage1\Azure-Kinect-Samples\opencv-kinfu-samples\x64\Release\kinfu_example.exe
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_aruco410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_bgsegm410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_bioinspired410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_calib3d410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_ccalib410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_core410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_dpm410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_face410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_features2d410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_ffmpeg410_64.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_flann410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_fuzzy410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_gapi410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_hfs410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_highgui410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_imgcodecs410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_imgproc410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_img_hash410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_line_descriptor410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_ml410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_objdetect410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_optflow410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_phase_unwrapping410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_photo410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_plot410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_quality410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_reg410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_rgbd410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_saliency410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_shape410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_stitching410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_structured_light410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_superres410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_surface_matching410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_video410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_videoio410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_videostab410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_viz410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_xfeatures2d410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_ximgproc410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_xobjdetect410.dll
+  C:\ZIM\MasterThesisProject\Stage1\opencv-4.1.0\opencv-4.1.0\build\bin\Release\opencv_xphoto410.dll
+         42 file(s) copied.
