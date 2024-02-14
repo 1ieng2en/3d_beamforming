@@ -4,7 +4,7 @@ import glob
 import open3d as o3d
 import scipy.io
 import numpy as np
-from bf3d_prep import FolderSelector
+from bf3d_prep import bf3d_data_prep
 
 
 
