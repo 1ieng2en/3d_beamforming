@@ -1,4 +1,7 @@
 cache
 acoular
 temp*
-pcd_*.xml
+pcd*.xml
+pcd_mic_temp.xml
+pcd_temp_verti.xml
+temp.h5
