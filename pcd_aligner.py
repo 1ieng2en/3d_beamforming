@@ -10,7 +10,7 @@ import re
 import contextlib
 
 import xml.etree.ElementTree as ET
-
+import copy
 
 class PointCloud_PreProcessor:
     def __init__(self, file_path):
@@ -20,6 +20,8 @@ class PointCloud_PreProcessor:
         self.cpcd = None
         self.pcd_mic = None
         self.mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5)
+        self.trans_init = None
+        self.origional_mic = None
 
     def pcd_read(self):
         file_path = self.ply_file_path + 'kf_output.ply'
@@ -124,6 +126,26 @@ class PointCloud_PreProcessor:
             pcd = self.pcd_mic
         o3d.visualization.draw_geometries([self.mesh_frame, pcd]) # visualize the point cloud
         return
+    
+    def shift_mic_array(self, x, y, z):
+        """
+        Shift the microphone array to a specific direction and specific distance
+        the shift is normally very small, used to adjust the array when doing the post processing
+        the shift should happend based on the array's current plane, or to it's normal direction
+        x, y means the same plane, z means the normal direction, instead of the current coordinate system
+        this function is based on the array_align function, before using this function, the array_align function should be called first
+        """
+
+        # get the origional mic array's x, y, z
+        omic = self.origional_mic
+        trans_init = self.trans_init
+        # applied the shift to origional mic array, omic is a o3d.geometry.PointCloud
+        omic.points = o3d.utility.Vector3dVector(np.asarray(omic.points) + [x, y, z])
+        # applied the trans_init to the origional mic array to get the shifted mic array
+        shifted_mic = omic.transform(trans_init)
+
+        return shifted_mic
+
 
 ##############################################################################################################
 # Extract data from clipboard
@@ -306,13 +328,13 @@ class PointCloud_PreProcessor:
         mics_number = self.mic_array(filename,x,y,z)
         mics = mics_number[:,1:]
 
-        self.pcd_mic = o3d.geometry.PointCloud()
-        self.pcd_mic.points = o3d.utility.Vector3dVector(mics)
+        self.origional_mic = o3d.geometry.PointCloud()
+        self.origional_mic.points = o3d.utility.Vector3dVector(mics)
 
 ##############################################################################################################
 
     def array_align(self):
-        source = self.pcd_mic
+        source = self.origional_mic
         target = self.cpcd
 
         self.pcd_crop(pcd = target, title="choose 3 points on the pcd", mesh_frame= None)
@@ -338,15 +360,20 @@ class PointCloud_PreProcessor:
         #    source, target, threshold, trans_init,
         #    o3d.pipelines.registration.TransformationEstimationPointToPoint())
 
-        # transformation = reg_p2p.transformation
+        return trans_init
 
-        #source.transform(transformation)
+    
+    def array_transform(self, trans_init, origional_translate = None):
+        source = copy.deepcopy(self.origional_mic)
+
+        if origional_translate is not None:
+            source.translate(origional_translate)
+
+        #source.transform
         source.transform(trans_init)
-        spheres = []
 
         self.pcd_mic = source
-        self.cpcd = target
-        return
+        return source
 
     def paint_uniform_color(self, pcd = None, color = [0.5, 0.5, 0.5]):
         if pcd is None:
@@ -354,9 +381,12 @@ class PointCloud_PreProcessor:
         pcd.paint_uniform_color(color)
         return pcd
 
-    def pcd_show_highlight(self):
+    def pcd_show_highlight(self, pcdmic = None):
 
-        source = self.pcd_mic
+        if pcdmic is None:
+            source = self.pcd_mic
+        else:
+            source = pcdmic
         target = self.cpcd
 
         spheres = []
