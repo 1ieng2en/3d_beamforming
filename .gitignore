@@ -5,3 +5,4 @@ pcd*.xml
 pcd_mic_temp.xml
 pcd_temp_verti.xml
 temp.h5
+*.npz

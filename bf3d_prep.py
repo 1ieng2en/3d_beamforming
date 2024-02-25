@@ -14,6 +14,8 @@ import scipy.spatial
 import tables
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
+from scipy.sparse import lil_matrix
+import gc
 
 class bf3d_data_prep:
     def __init__(self, rootfolder, filetype, return_type = 'path'):
@@ -157,6 +159,7 @@ class bf3d_data_prep:
         """
         # calculate the distance between the mesh centers and the microphone array
         r = scipy.spatial.distance.cdist(np.array(pcd_mic.points), np.array(centers_pcd.points), metric="euclidean")
+        rxyz = np.array(pcd_mic.points)[:, np.newaxis, :] - np.array(centers_pcd.points)[np.newaxis, :, :]
         r = r.T
         # calculate the angle between the mesh centers and the microphone array
         if self.rsf is None:
@@ -185,43 +188,148 @@ class bf3d_data_prep:
                     "mcv": mic_to_center_vector, 
                     "normals": normals}
 
-        return r, theta_far
-
+        return r, theta_far, rxyz
     
-    def build_tree_and_find_neighbors(self, points, k):
-        from scipy.spatial import cKDTree
+    def calculate_similarity_and_find_edges(self, normals, indices, threshold=0.95, chunk_size=1000):
+        n = normals.shape[0]
+        edge_points = np.zeros(n, dtype=bool)
+        # use the lil_matrix to store the sparse matrix
+        similar_normals_sparse = lil_matrix((n, n), dtype=bool)
 
+        for start_row in range(0, n, chunk_size):
+            end_row = min(start_row + chunk_size, n)
+            chunk_normals = normals[start_row:end_row]
+            dot_products = np.dot(chunk_normals, normals.T)
+            similarity = dot_products >= threshold
+            print("calculating progress: ", end_row, " / ", n)
+
+            for i, row in enumerate(range(start_row, end_row)):
+                neighbor_indices = indices[row, 1:]
+                is_edge = np.any(~similarity[i, neighbor_indices])
+                edge_points[row] = is_edge
+
+                # store in the sparse matrix
+                similar_normals_indices = np.where(similarity[i])[0]
+                similar_normals_sparse[row, similar_normals_indices] = True
+
+        return edge_points, similar_normals_sparse
+
+    def find_edge_points(self, similarity_matrix, indices):
+        # Identify edge points as those having at least one neighbor with a dissimilar normal
+        edge_points = np.any(~similarity_matrix[indices[:, 0], indices[:, 1:]], axis=1)
+        return edge_points
+
+    def build_tree_and_find_neighbors(self, points, k=4):
+        from scipy.spatial import cKDTree
         # Build a k-d tree for efficient nearest neighbors search
         tree = cKDTree(points)
+        # Find k nearest neighbors for each point
+        distances, indices = tree.query(points, k=k+1)
+        return tree, distances, indices
 
-        # Precompute nearest neighbors for each point
-        neighbors_info = [tree.query(point, k=k) for point in points]
-
-        # Exclude the point itself from its list of neighbors
-        neighbors_info = [(distances[1:], indices[1:]) for distances, indices in neighbors_info]
-
-        return tree, neighbors_info
+    def is_edge_point(self, point_index, indices, normals, normal_similarity_threshold=0.95):
+        target_normal = normals[point_index]
+        for neighbor_index in indices:
+            if np.dot(normals[neighbor_index], target_normal) < normal_similarity_threshold:
+                return True
+        return False
     
-    def calculate_gradients_with_neighbors(self, points, values, neighbors_info):
+    def calculate_gradients(self, points, values, edge_points, tree_info, similar_normals_sparse):
+        tree, distances, indices = tree_info
+        gradients = np.zeros((len(points), 3))  # Allocate array for gradient vectors
 
-        # Allocate array for gradients
-        gradients = np.zeros_like(points[:,1])
+        # Step 1: Calculate gradients normally for all points
+        for i in range(len(points)):
+            for j in range(1, distances.shape[1]):  # Skip the first index since it's the point itself
+                if distances[i][j] == 0:
+                    continue  # Avoid division by zero
+                direction = (points[indices[i][j]] - points[i]) / distances[i][j]
+                gradient = (values[indices[i][j]] - values[i]) / distances[i][j]
+                gradients[i] += gradient * direction
+            gradients[i] /= (distances.shape[1] - 1)  # Normalize by the number of neighbors
 
-        # Iterate over all points to calculate gradients
-        for i, (distances, indices) in enumerate(neighbors_info):
-            # Scalar value differences
-            value_differences = values[indices] - values[i]
-
-            # Avoid division by zero
-            distances[distances == 0] = np.inf
-
-            # Calculate weighted sum of differences
-            weighted_diff = np.sum(value_differences / distances)
-
-            # Assign calculated gradient
-            gradients[i] = weighted_diff
+        # Step 2: Adjust gradients for edge points based on similar normals
+        for i in range(len(points)):
+            if edge_points[i]:
+                similar_normals_indices = similar_normals_sparse.rows[i]
+                if similar_normals_indices:
+                    average_gradient = np.mean(gradients[similar_normals_indices], axis=0)
+                    gradients[i] += average_gradient
 
         return gradients
+
+
+    def precompute_edge_points(self, points, edge_points,normals, threshold=0.95):
+        dot_products = np.dot(normals, normals.T)
+        similar_normals_indices = []
+        for i in range(len(points)):
+            if edge_points[i]:
+                # Compute dot products of normals for this edge point with all others
+                dot_products = np.dot(normals, normals[i])
+                similar_normals_indices[i] = np.where(dot_products >= threshold)[0]
+            else:
+                similar_normals_indices[i] = []
+
+        return similar_normals_indices
+
+
+    def apply_eq(self, signal, fs, filter_freqs, filter_gains, nperseg=1024):
+        """
+        Apply a custom filter to a signal.
+
+        Parameters:
+        - signal: The original signal.
+        - fs: The sampling frequency of the signal.
+        - filter_freqs: The frequencies of the filter's frequency response.
+        - filter_gains: The gains corresponding to the filter_freqs.
+
+        Returns:
+        - reconstructed_signal: The filtered signal.
+        """
+
+        from scipy.signal import stft, istft, windows, freqz, hann
+        from scipy.interpolate import interp1d
+        import matplotlib.pyplot as plt
+
+        # Interpolate filter gains
+        freqs_interp = np.linspace(0, fs/2, fs//2)
+        interp_func = interp1d(filter_freqs, filter_gains, kind='linear', fill_value="extrapolate")
+        interp_gains = interp_func(freqs_interp)
+
+        # STFT parameters
+        noverlap = nperseg // 2
+        window = windows.hann(nperseg)
+
+        # Perform STFT
+        f, t, Zxx = stft(signal, fs, window=window, nperseg=nperseg, noverlap=noverlap, boundary='zeros')
+
+        # Apply filter in frequency domain
+        Zxx_filtered = np.zeros_like(Zxx)
+        for i, freq in enumerate(f):
+            if freq <= fs/2:
+                idx = np.argmin(np.abs(freqs_interp - freq))
+                Zxx_filtered[i, :] = Zxx[i, :] * interp_gains[idx]
+            else:
+                # Mirror the filter gains for frequencies above Nyquist frequency
+                idx = np.argmin(np.abs(freqs_interp - (fs - freq)))
+                Zxx_filtered[i, :] = Zxx[i, :] * interp_gains[idx]
+
+        # Inverse STFT to reconstruct the signal
+        _, reconstructed_signal = istft(Zxx_filtered, fs, window=window, nperseg=nperseg, noverlap=noverlap, boundary=True)
+
+        return reconstructed_signal
+    
+    def apply_eq_fir(self, numtaps, filter_freqs, filter_gains, original_freqs, original_signal, fs):
+        """derive a FIR filter from the frequency response and apply it to the signal."""
+        from scipy.signal import firwin2, filtfilt
+        taps = firwin2(numtaps, freq = filter_freqs, gain = filter_gains, fs = fs)
+        
+        # Apply the filter to the signal
+        filtered_signal = filtfilt(taps, 1.0, original_signal, padlen=150)
+
+        return filtered_signal, taps
+    
+
 
 
 class reverse_sound_field:
@@ -240,6 +348,9 @@ class reverse_sound_field:
         self.mesh = self.gen_mesh(filtered_pcd)
         self.datas = None
         self.centers_pcd = centers_pcd
+        self.rxyz = None
+        self.normals = None
+        self.k = None
 
     def gen_mesh(self, pcd):
         
@@ -274,7 +385,7 @@ class reverse_sound_field:
         U = self.pm * (1/r + k) * S
         return U
 
-    def far_field_pressure(self, f, r, grad_p, theta, S, p):
+    def far_field_pressure(self, f, r, grad_p, theta, S, p, dpdn, dgdn):
         
         """
         Calculate the far field approximation using the radiation of piston.
@@ -291,19 +402,18 @@ class reverse_sound_field:
         Returns:
             p_hat: Far field pressure due to the piston radiation, approximated
         """
-        C = 343
-        omega = 2 * np.pi * f
-        k = omega / C
         rho = 1.225 # air density
+        k = self.k
 
         a = np.sqrt(S/np.pi)[:, np.newaxis]
         term = 2 * j1(k * a * np.sin(theta)) / (k * a * np.sin(theta))
         # p_hat = 2*I/(r) * S[:, np.newaxis] *np.exp(1j * ( - k * r)) * term
         # p_hat = 1j * omega * rho * u * S[:, np.newaxis] / (2 *np.pi *r) *np.exp(1j * ( - k * r)) * term
         # 1j * omega * rho * u =  - grad_p
-
         # u = p/(1j * omega *rho) + grad_p[:, np.newaxis]
-        u = -1/(1j * omega * rho) * (-grad_p[:, np.newaxis]) + 1j * p
+        # u = -1/(1j * omega * rho) * (-grad_p[:, np.newaxis]) + 1j * p
+        G = self.G(r, k)
+        dpdn = dpdn[:, np.newaxis]
 
         self.datas = {"grad_p": grad_p,
                 "r": r, 
@@ -311,11 +421,14 @@ class reverse_sound_field:
                     "S": S,
                     "a": a,
                     "term": term,
-                    "k": k,
+                    "dgdn": dgdn,
                     "p": p,
                     "f": f,
-                    "u": u}
+                    "G": G,
+                    "dpdn": dpdn}
+        
 
+        p_hat = - G * dpdn * S[:, np.newaxis] + p * dgdn * S[:, np.newaxis]
         # p_hat =  - grad_p[:, np.newaxis]* S[:, np.newaxis] / (2 *np.pi *r) *np.exp(1j * ( - k * r)) * term
         # p_hat =  - grad_p[:, np.newaxis]/ (2 *np.pi *r) *np.exp(1j * ( - k * r)) * term
         # is it really make sense to multiply the S? becouse S is the 
@@ -331,9 +444,31 @@ class reverse_sound_field:
         # p_hat = j omega rho u/(2 pi r) exp(-jkr) dxdydz (integral over the surface)
         # p_hat = j omega rho u/(2 pi r) exp(-jkr) dS (integral over the surface)
         
-        p_hat =  1j * omega * rho * u / (2 *np.pi *r) *np.exp(1j * ( - k * r)) *S[:, np.newaxis] * term
+        # p_hat =  1j * omega * rho * u / (2 *np.pi *r) *np.exp(1j * ( - k * r)) *S[:, np.newaxis]
 
         return (p_hat)
+
+    def G(self, R, k):
+        return np.exp(-1j * k * R) / R
+
+    def grad_G(self, x, y, z, k, R):
+        # Compute partial derivatives
+        dG_dR = (-np.exp(-1j * k * R) / R**2) - (1j * k * np.exp(-1j * k * R) / R)
+        grad_x = dG_dR * (x / R)
+        grad_y = dG_dR * (y / R)
+        grad_z = dG_dR * (z / R)
+        
+        return grad_x, grad_y, grad_z
+
+    def dG_dn(self, r):
+        x = self.rxyz[:,:,0].T
+        y = self.rxyz[:,:,1].T
+        z = self.rxyz[:,:,2].T
+        n = self.normals
+
+        grad_x, grad_y, grad_z = self.grad_G(x, y, z, self.k, r)
+        return grad_x * n[:,0,np.newaxis] + grad_y * n[:,1,np.newaxis] + grad_z * n[:,2,np.newaxis]
+
 
     def triangle_area(self, vertices):
         """Compute the area of a triangle given its vertices."""
@@ -349,44 +484,8 @@ class reverse_sound_field:
         vertices = np.asarray(mesh.vertices)
         return np.array([self.triangle_area(vertices[tri]) for tri in triangles])
 
-    def angle_between_vectors(self, vector, normal):
-        """Compute the angle in degrees between a given vector and a normal."""
-        dot_product = np.dot(vector, normal)
-        magnitudes = np.linalg.norm(vector) * np.linalg.norm(normal)
-        return np.degrees(np.arccos(dot_product / magnitudes)), magnitudes
 
-    def vector_from_point_to_triangle_center(self, point, triangle_vertices, axis_in):
-        """Compute the vector from a given point to the center of the triangle."""
-        center = np.mean(triangle_vertices, axis = axis_in)
-        return center - point
-    
-    def monopole_Pressure(self, R, f): # define the monopole pressure in relate with distance, time, and wavenumber
-        # Your code here
-        c = 343
-        k = 2 * np.pi * f / c
-        Pm = 1/R * np.exp(1j * ( - k * R))
-        return Pm
-
-    def compute_angles_from_point_to_normals(self, mesh, point):
-        """Compute angles between the vector from a point to triangle centers and all triangle normals in the mesh."""
-        triangles = np.asarray(mesh.triangles)
-        vertices = np.asarray(mesh.vertices)
-        normals = np.asarray(mesh.triangle_normals)
-        angles = []
-        mags = []
-        vector_to_centers = []
-
-        for tri, normal in zip(triangles, normals):
-            triangle_vertice = vertices[tri]
-            vector_to_center = self.vector_from_point_to_triangle_center(point, triangle_vertice, 0)
-            angle, mag = self.angle_between_vectors(vector_to_center, normal)
-            angles.append(angle)
-            mags.append(mag)
-            vector_to_centers.append(vector_to_center)
-        
-        return np.array(angles), np.array(mags)
-
-    def pressure_at_array_point(self, r, theta_far, f_values, I_list, grad_p):
+    def pressure_at_array_point(self, r, theta_far, f_values, I_list, grad_p, similiarity_matrix):
         S = self.compute_triangle_areas(self.mesh)
 
         # Compute Pf for all t values
@@ -395,7 +494,17 @@ class reverse_sound_field:
             # U[theta <= 0] = 0
             # display(np.count_nonzero(U))
             # Step Two, given the mesh volume velocity, get the total sound field.
-            Pf_f = np.sum(self.far_field_pressure(f, r,gp, theta_far, S, I[:,np.newaxis]), axis=0)
+            C = 343
+            omega = 2 * np.pi * f
+            self.k = omega / C
+            dgdn = self.dG_dn(r)
+            dpdn  = np.sum(gp *self.normals, axis=1)
+            
+            Pf_f = np.sum(self.far_field_pressure(f, r,
+                                                  gp, theta_far, 
+                                                  S, I[:,np.newaxis], 
+                                                  dpdn, dgdn, 
+                                                  ), axis=0)
             Pf_values.append(Pf_f)
 
         Pf_values = np.array(Pf_values)
