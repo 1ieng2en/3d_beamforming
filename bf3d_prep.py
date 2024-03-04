@@ -319,15 +319,19 @@ class bf3d_data_prep:
 
         return reconstructed_signal
     
-    def apply_eq_fir(self, numtaps, filter_freqs, filter_gains, original_freqs, original_signal, fs):
+    def apply_eq_fir(self, numtaps, frequencies, filter_rec, original_signal, fs):
         """derive a FIR filter from the frequency response and apply it to the signal."""
-        from scipy.signal import firwin2, filtfilt
-        taps = firwin2(numtaps, freq = filter_freqs, gain = filter_gains, fs = fs)
-        
-        # Apply the filter to the signal
-        filtered_signal = filtfilt(taps, 1.0, original_signal, padlen=150)
+        from scipy.signal import firwin2, lfilter
 
-        return filtered_signal, taps
+        # make sure frequncies stoped with fs/2
+        #fq = np.concatenate((frequencies, [fs/2]))
+        #fr = np.concatenate((filter_rec, [filter_rec[-1]]))
+
+        fir_filt = firwin2(numtaps, frequencies, filter_rec, fs = fs, antisymmetric=False)
+        # Apply the filter to the signal
+        filtered_signal = lfilter(fir_filt, 1.0, original_signal)
+
+        return filtered_signal, fir_filt
     
 
 
@@ -485,7 +489,32 @@ class reverse_sound_field:
         return np.array([self.triangle_area(vertices[tri]) for tri in triangles])
 
 
-    def pressure_at_array_point(self, r, theta_far, f_values, I_list, grad_p, similiarity_matrix):
+    def pressure_at_array_point(self, r, theta_far, f_values, I_list, grad_p):
+        S = self.compute_triangle_areas(self.mesh)
+
+        # Compute Pf for all t values
+        Pf_values = []
+        for f, I, gp in zip(f_values, I_list, grad_p):
+            # U[theta <= 0] = 0
+            # display(np.count_nonzero(U))
+            # Step Two, given the mesh volume velocity, get the total sound field.
+            C = 343
+            omega = 2 * np.pi * f
+            self.k = omega / C
+            dgdn = self.dG_dn(r)
+            dpdn  = np.einsum('ij,ij->i',gp, self.normals)
+            
+            Pf_f = np.sum(self.far_field_pressure(f, r,
+                                                  gp, theta_far, 
+                                                  S, I[:,np.newaxis], 
+                                                  dpdn, dgdn, 
+                                                  ), axis=0)
+            Pf_values.append(Pf_f)
+
+        Pf_values = np.array(Pf_values)
+        return Pf_values
+    
+    def pressure_at_cir_point(self, r, theta_far, f_values, I_list, grad_p):
         S = self.compute_triangle_areas(self.mesh)
 
         # Compute Pf for all t values
@@ -500,15 +529,16 @@ class reverse_sound_field:
             dgdn = self.dG_dn(r)
             dpdn  = np.sum(gp *self.normals, axis=1)
             
-            Pf_f = np.sum(self.far_field_pressure(f, r,
-                                                  gp, theta_far, 
-                                                  S, I[:,np.newaxis], 
-                                                  dpdn, dgdn, 
-                                                  ), axis=0)
+            Pf_f = self.far_field_pressure(f, r,
+                                            gp, theta_far, 
+                                            S, I[:,np.newaxis], 
+                                            dpdn, dgdn, 
+                                            )
             Pf_values.append(Pf_f)
 
         Pf_values = np.array(Pf_values)
         return Pf_values
+
 
     def calculate_reverse_sound_field(self):
         """

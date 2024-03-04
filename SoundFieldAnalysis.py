@@ -503,6 +503,8 @@ class SoundFieldAnalysis:
         Plot the sound field in 3D.
         """
         plotc_clamped, p_range = self.clamp(plotc, dynamic_range, max_crop)
+
+        print(f"shape of plotc_clamped: {plotc_clamped.shape}")
         
         if plot_mesh:
             if self.pv_mesh is None:
