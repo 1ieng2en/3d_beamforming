@@ -6,7 +6,6 @@ pcd_mic_temp.xml
 pcd_temp_verti.xml
 temp.h5
 *.npz
-*.ply
 pcd_mic_temp.xml
 pcd_temp_cen.xml
 pcd_temp_verti.xml
