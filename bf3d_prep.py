@@ -192,7 +192,7 @@ class bf3d_data_prep:
     
     def calculate_similarity_and_find_edges(self, normals, indices, threshold=0.95, chunk_size=1000):
         n = normals.shape[0]
-        edge_points = np.zeros(n, dtype=bool)
+        edge_points = lil_matrix((n, 1), dtype=bool)
         # use the lil_matrix to store the sparse matrix
         similar_normals_sparse = lil_matrix((n, n), dtype=bool)
 
@@ -211,6 +211,8 @@ class bf3d_data_prep:
                 # store in the sparse matrix
                 similar_normals_indices = np.where(similarity[i])[0]
                 similar_normals_sparse[row, similar_normals_indices] = True
+
+            del dot_products, similarity, similar_normals_indices, neighbor_indices, is_edge, chunk_normals
 
         return edge_points, similar_normals_sparse
 

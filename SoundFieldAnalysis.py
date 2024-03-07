@@ -6,6 +6,7 @@ import cvxpy as cp
 import open3d as o3d
 from numpy import ndarray
 import pcd_aligner
+import heapq
 
 
 
@@ -421,7 +422,12 @@ class SoundFieldAnalysis:
         pv_mesh = pv.PolyData(vertices, triangles)
         return pv_mesh
     
-    def add_slicer(self, plotter, mode, p_range, center = [0,0], dynamic_range= 5, max_crop = 0, plane="xy", position=0, size=[1, 1], density=100, plot_mesh = True):
+    def add_slicer(self, plotter, mode, 
+                   p_range, center = [0,0], 
+                   dynamic_range= 5, max_crop = 0, 
+                   plane="xy", position=0, size=[1, 1], 
+                   density=100, plot_mesh = True, 
+                   **kwargs):
         # Create a meshgrid for the specified plane
         x = np.linspace(center[0]-size[0]/2, center[0]+size[0]/2, density)
         y = np.linspace(center[1]-size[1]/2, center[1]+size[1]/2, density)
@@ -450,17 +456,45 @@ class SoundFieldAnalysis:
             else:
                 cloud = pv.PolyData(points)
 
-            plotc, _ = self.gen_result(mode)
+            if mode is str:
+                plotc, _ = self.gen_result(mode)
+            else:
+                plotc = self.gen_result_ac(mode, kwargs.get("cfreq", 1000), kwargs.get("band", 1))
+
             if p_range is None:
                 plotc_clamped, p_range = self.clamp(plotc, dynamic_range, max_crop)
             else:
                 plotc_clamped = np.clip(plotc, p_range[0], p_range[1])
             cloud["Sound Pressure(dB)"] = plotc_clamped
-            plotter.add_mesh(cloud, cmap='rainbow', scalars='Sound Pressure(dB)',show_scalar_bar = True,  opacity="linear")
+            plotter.add_mesh(cloud, cmap='rainbow', scalars='Sound Pressure(dB)',show_scalar_bar = True,  opacity=kwargs.get("opacity", None))
         finally:
             self.points = temppoints # restore the points
         return plotter, cloud
     
+    def gen_result_ac(self, mode, cfreq, band):
+        from acoular import MicGeom
+        import acoular
+        print("size of points: ", self.points.shape)
+        self.save_pcd_to_xml(points = self.points, xml_filename = "pcd_plane.xml")
+        micgeofile = 'pcd_mic_temp.xml'
+        mg = MicGeom( from_file=micgeofile)
+
+        ts = acoular.TimeSamples(name="temp.h5")
+
+        ps = acoular.PowerSpectra( time_data=ts, block_size=128, window="Hanning" )
+        grid_importer = acoular.ImportGrid()
+        grid_importer.from_file = 'pcd_plane.xml'
+        grid_importer.import_gpos()
+        st = acoular.SteeringVector(mics=mg )
+        st.grid = grid_importer
+        st.steer_type = 'true location'
+
+        bf = acoular.BeamformerFunctional(freq_data=ps, steer=st, r_diag=False, gamma=4)
+        pm = bf.synthetic(cfreq,band)
+        Lm = acoular.L_p(pm)
+        print("size fo Lm: ", Lm.shape)
+        return Lm
+
     def gen_result(self, mode, **kwargs):
         '''
         generate the result of the mode
@@ -490,6 +524,31 @@ class SoundFieldAnalysis:
             plotc = 20 * np.log10(np.abs(result_J / 20e-6))
         return plotc, result_J
     
+    def save_pcd_to_xml(self, points, xml_filename = "pcd_temp.xml", subgrid_name="default"):
+        import xml.etree.ElementTree as ET
+        from xml.dom import minidom
+
+        """
+        Save Open3D point cloud coordinates to an XML file.
+
+        :param pcd: Open3D point cloud object
+        :param xml_filename: Path to the output XML file
+        :param subgrid_name: Name of the subgrid (default is 'default')
+        """
+        # Create XML structure
+        root = ET.Element('root')
+        for point in points:
+            pos_element = ET.SubElement(root, 'pos', {
+                'x': str(point[0]),
+                'y': str(point[1]),
+                'z': str(point[2]),
+                'subgrid': subgrid_name
+            })
+        # Beautify and write to XML file
+        xml_str = minidom.parseString(ET.tostring(root)).toprettyxml(indent="   ")
+        with open(xml_filename, "w") as xml_file:
+            xml_file.write(xml_str)
+            xml_file.close()
     
     def clamp(self, plotc, dynamic_range, max_crop):
 
@@ -498,30 +557,82 @@ class SoundFieldAnalysis:
         plotc_clamped = np.clip(plotc, plotc_min, plotc_max)
         return plotc_clamped, [plotc_min, plotc_max]
 
-    def plot(self, plotc, dynamic_range=5, max_crop = 0, plot_mesh = True, opacity=None):
+
+    def plot(self, plotc, dynamic_range=5, 
+             max_crop=0, plot_mesh=True, 
+             opacity=None, highlight=None):
         """
-        Plot the sound field in 3D.
+        Plot the sound field in 3D with highlight boxes around the largest three values, then add the mesh.
         """
         plotc_clamped, p_range = self.clamp(plotc, dynamic_range, max_crop)
 
         print(f"shape of plotc_clamped: {plotc_clamped.shape}")
         
+        # Assuming self.points corresponds to the locations associated with plotc_clamped values
+        plotter = pv.Plotter()
+        if highlight is not None:
+            # Find the indices of the largest 3 values
+            largest_indices, values = zip(*self.find_k_largest_indices(plotc, highlight))
+            print(f"Value: {largest_indices}")
+            # Add highlight boxes around the largest three value points
+            ps = []
+            for point, value in zip(largest_indices, values):
+                p = self.points[point]
+                ps.append(p)
+                plotter = self.add_highlight_box(plotter, p, size=[0.02, 0.02, 0.02], value=value)
+
         if plot_mesh:
             if self.pv_mesh is None:
                 self.pv_mesh = self.gen_mesh(self.pcd)
             cloud = pv.PolyData(self.pv_mesh)
         else:
             cloud = pv.PolyData(self.points)
-
+        
         cloud["Sound Pressure(dB)"] = plotc_clamped  # Adding scalar values to the point cloud
-
-        # Create a Plotter object and add the point cloud
-        plotter = pv.Plotter()
-        plotter.add_mesh(cloud, cmap='rainbow', scalars='Sound Pressure(dB)',show_scalar_bar = True, point_size = 6, opacity=opacity)
+        plotter.add_mesh(cloud, cmap='rainbow', scalars='Sound Pressure(dB)', show_scalar_bar=True, point_size=6, opacity=opacity)
+        #plotter.add_point_labels(np.array(ps), values,
+        #                        font_size=100,
+         #                       point_color='red',
+          #                      text_color='black',
+           #                     point_size=5,
+           #                     margin=10,
+           #                     always_visible=True,
+           #                     render_points_as_spheres=True,
+            #                    shadow=True,
+            #                    render = True)
         # Show the point cloud
         return plotter, p_range
     
-    
+    def add_highlight_box(self, plotter, point, size, value):
+        """
+        Add a highlight box around the specified point.
+        """
+
+        bounds = [
+        point[0] - size[0]/2, point[0] + size[0]/2,  # xMin, xMax
+        point[1] - size[1]/2, point[1] + size[1]/2,  # yMin, yMax
+        point[2] - size[2]/2, point[2] + size[2]/2   # zMin, zMax
+        ]   
+        box = pv.Box(bounds=bounds)
+        plotter.add_mesh(box, color='red', line_width=2, style='wireframe')
+        # 计算文本的位置（框的正上方）
+        text_position = [point[0], point[1], point[2]]  # 在z轴方向稍微上移
+        # 添加文本标签
+        print(f"Value: {value}")
+        print(f"Text Position: {text_position}")
+        return plotter
+
+    def find_k_largest_indices(self, seq, k):
+        # 构建一个由(值, 索引)组成的元组列表
+        enumerated_seq = list(enumerate(seq))
+        
+        # 使用heapq.nlargest来找到k个最大的元组，基于元组的第一个元素（即原始列表中的值）
+        k_largest = heapq.nlargest(k, enumerated_seq, key=lambda x: x[1])
+        
+        # 从这些元组中提取索引，保持它们原始的顺序
+        return k_largest
+
+        
     def gen_mesh(self, pcd):
         
         # variables for ball size, [lowest dimention, highest dimention, average dimention(starting point), increment, unit: m]
