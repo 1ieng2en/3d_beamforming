@@ -236,7 +236,7 @@ class bf3d_data_prep:
                 return True
         return False
     
-    def calculate_gradients(self, points, values, edge_points, tree_info, similar_normals_sparse):
+    def calculate_gradients(self, points, values, tree_info):
         tree, distances, indices = tree_info
         gradients = np.zeros((len(points), 3))  # Allocate array for gradient vectors
 
@@ -249,16 +249,28 @@ class bf3d_data_prep:
                 gradient = (values[indices[i][j]] - values[i]) / distances[i][j]
                 gradients[i] += gradient * direction
             gradients[i] /= (distances.shape[1] - 1)  # Normalize by the number of neighbors
-
-        # Step 2: Adjust gradients for edge points based on similar normals
-        for i in range(len(points)):
-            if edge_points[i]:
-                similar_normals_indices = similar_normals_sparse.rows[i]
-                if similar_normals_indices:
-                    average_gradient = np.mean(gradients[similar_normals_indices], axis=0)
-                    gradients[i] += average_gradient
-
         return gradients
+    
+    def adjust_gradients(self, points, edge_points, cluster_labels, gradients, min_samples=2):
+        n_clusters = np.max(cluster_labels) + 1
+        for cluster_id in range(n_clusters):
+            cluster_mask = cluster_labels == cluster_id
+            cluster_edge_mask = np.logical_and(cluster_mask, edge_points)
+            if np.any(cluster_edge_mask):
+                edge_gradients = gradients[cluster_edge_mask]
+                average_edge_gradient = np.mean(edge_gradients, axis=0)
+                gradients[cluster_mask] += average_edge_gradient
+        return gradients
+    
+    def identify_edge_points_in_clusters(self, points, tree_info, labels, min_samples=2):
+        _, _, indices = tree_info
+        edge_points = np.zeros(len(points), dtype=bool)
+        for i, label in enumerate(labels):
+            if label != -1:
+                neighbor_labels = labels[indices[i]]
+                if np.sum(neighbor_labels == label) < min_samples:
+                    edge_points[i] = True
+        return edge_points
 
 
     def precompute_edge_points(self, points, edge_points,normals, threshold=0.95):
