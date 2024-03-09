@@ -15,3 +15,7 @@ pcd_temp_cen.xml
 pcd_mic_temp.xml
 pcd_temp_verti.xml
 temp.h5
+temp.h5
+pcd_temp_verti.xml
+pcd_temp_cen.xml
+pcd_mic_temp.xml
