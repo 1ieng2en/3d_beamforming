@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<BKArray name="36ch sector wheel">
+   <pos Name="Point 1" x="-0.0006251" y="0.05013" z="0"/>
+   <pos Name="Point 2" x="-0.1102" y="0.0438" z="0"/>
+   <pos Name="Point 3" x="-0.2177" y="0.02527" z="0"/>
+   <pos Name="Point 4" x="-0.3256" y="0.07448" z="0"/>
+   <pos Name="Point 5" x="-0.2621" y="0.1537" z="0"/>
+   <pos CouplingPoint="1" Name="Point 6" x="-0.2273" y="0.2434" z="0"/>
+   <pos Name="Point 7" x="-0.1109" y="0.16" z="0"/>
+   <pos Name="Point 8" x="-0.007009" y="0.1283" z="0"/>
+   <pos Name="Point 9" x="-0.02275" y="0.2086" z="0"/>
+   <pos Name="Point 10" x="-0.06538" y="0.2449" z="0"/>
+   <pos Name="Point 11" x="-0.004668" y="0.3207" z="0"/>
+   <pos Name="Point 12" x="0.09016" y="0.2302" z="0"/>
+   <pos Name="Point 13" x="0.043726" y="-0.024524" z="0"/>
+   <pos Name="Point 14" x="0.093032" y="0.073536" z="0"/>
+   <pos Name="Point 15" x="0.13073" y="0.1759" z="0"/>
+   <pos Name="Point 16" x="0.2273" y="0.24474" z="0"/>
+   <pos Name="Point 17" x="0.26416" y="0.15014" z="0"/>
+   <pos CouplingPoint="1" Name="Point 18" x="0.32444" y="0.075148" z="0"/>
+   <pos Name="Point 19" x="0.19401" y="0.016042" z="0"/>
+   <pos Name="Point 20" x="0.11462" y="-0.05808" z="0"/>
+   <pos Name="Point 21" x="0.19203" y="-0.084598" z="0"/>
+   <pos Name="Point 22" x="0.24478" y="-0.065829" z="0"/>
+   <pos Name="Point 23" x="0.28007" y="-0.15631" z="0"/>
+   <pos Name="Point 24" x="0.15428" y="-0.19318" z="0"/>
+   <pos Name="Point 25" x="-0.043101" y="-0.025606" z="0"/>
+   <pos Name="Point 26" x="0.017168" y="-0.11734" z="0"/>
+   <pos Name="Point 27" x="0.086966" y="-0.20117" z="0"/>
+   <pos CouplingPoint="1" Name="Point 28" x="0.098298" y="-0.31922" z="0"/>
+   <pos Name="Point 29" x="-0.0020581" y="-0.30384" z="0"/>
+   <pos Name="Point 30" x="-0.097141" y="-0.31855" z="0"/>
+   <pos Name="Point 31" x="-0.083114" y="-0.17604" z="0"/>
+   <pos Name="Point 32" x="-0.10761" y="-0.07022" z="0"/>
+   <pos Name="Point 33" x="-0.16928" y="-0.124" z="0"/>
+   <pos Name="Point 34" x="-0.1794" y="-0.17907" z="0"/>
+   <pos Name="Point 35" x="-0.2754" y="-0.16439" z="0"/>
+   <pos Name="Point 36" x="-0.24444" y="-0.037019" z="0"/>
+</BKArray>

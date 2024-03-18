@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<BKArray name="P30D30_f12" flushMounted="OnOff">
+   <pos Name="Point 1" x="-0.031665" y="0.028396" z="0"/>
+   <pos Name="Point 2" x="-0.073334" y="0.024711" z="0"/>
+   <pos Name="Point 3" x="-0.051825" y="0.091619" z="0"/>
+   <pos Name="Point 4" x="-0.14167" y="0.021126" z="0"/>
+   <pos Name="Point 5" x="-0.12484" y="0.059422" z="0"/>
+   <pos Name="Point 6" x="-0.098144" y="0.11344" z="0"/>
+   <pos Name="Point 7" x="0.017221" y="0.03889" z="0"/>
+   <pos Name="Point 8" x="0.00083989" y="0.077381" z="0"/>
+   <pos Name="Point 9" x="0.071121" y="0.077601" z="0"/>
+   <pos CouplingPoint="1" Name="Point 10" x="-0.023687" y="0.14127" z="0"/>
+   <pos Name="Point 11" x="0.017936" y="0.13709" z="0"/>
+   <pos Name="Point 12" x="0.077559" y="0.12839" z="0"/>
+   <pos Name="Point 13" x="0.042309" y="-0.0043605" z="0"/>
+   <pos Name="Point 14" x="0.073853" y="0.023113" z="0"/>
+   <pos Name="Point 15" x="0.095779" y="-0.043661" z="0"/>
+   <pos Name="Point 16" x="0.12703" y="0.066181" z="0"/>
+   <pos Name="Point 17" x="0.13593" y="0.025306" z="0"/>
+   <pos CouplingPoint="1" Name="Point 18" x="0.14607" y="-0.034088" z="0"/>
+   <pos Name="Point 19" x="0.0089271" y="-0.041585" z="0"/>
+   <pos Name="Point 20" x="0.044803" y="-0.063096" z="0"/>
+   <pos Name="Point 21" x="-0.011926" y="-0.10459" z="0"/>
+   <pos Name="Point 22" x="0.1022" y="-0.10036" z="0"/>
+   <pos Name="Point 23" x="0.066071" y="-0.12145" z="0"/>
+   <pos Name="Point 24" x="0.01272" y="-0.14946" z="0"/>
+   <pos Name="Point 25" x="-0.036792" y="-0.021341" z="0"/>
+   <pos Name="Point 26" x="-0.046163" y="-0.062109" z="0"/>
+   <pos Name="Point 27" x="-0.10315" y="-0.020976" z="0"/>
+   <pos Name="Point 28" x="-0.063871" y="-0.12821" z="0"/>
+   <pos Name="Point 29" x="-0.095096" y="-0.10037" z="0"/>
+   <pos CouplingPoint="1" Name="Point 30" x="-0.13821" y="-0.058282" z="0"/>
+  <con Node1="1" Node2="2"/>
+  <con Node1="1" Node2="3"/>
+  <con Node1="1" Node2="8"/>
+  <con Node1="2" Node2="4"/>
+  <con Node1="2" Node2="5"/>
+  <con Node1="2" Node2="25"/>
+  <con Node1="3" Node2="5"/>
+  <con Node1="3" Node2="6"/>
+  <con Node1="3" Node2="10"/>
+  <con Node1="4" Node2="5"/>
+  <con Node1="4" Node2="27"/>
+  <con Node1="5" Node2="6"/>
+  <con Node1="7" Node2="8"/>
+  <con Node1="7" Node2="9"/>
+  <con Node1="7" Node2="14"/>
+  <con Node1="8" Node2="10"/>
+  <con Node1="8" Node2="11"/>
+  <con Node1="9" Node2="11"/>
+  <con Node1="9" Node2="12"/>
+  <con Node1="9" Node2="16"/>
+  <con Node1="10" Node2="11"/>
+  <con Node1="11" Node2="12"/>
+  <con Node1="13" Node2="14"/>
+  <con Node1="13" Node2="15"/>
+  <con Node1="13" Node2="20"/>
+  <con Node1="14" Node2="16"/>
+  <con Node1="14" Node2="17"/>
+  <con Node1="15" Node2="17"/>
+  <con Node1="15" Node2="18"/>
+  <con Node1="15" Node2="22"/>
+  <con Node1="16" Node2="17"/>
+  <con Node1="17" Node2="18"/>
+  <con Node1="19" Node2="20"/>
+  <con Node1="19" Node2="21"/>
+  <con Node1="19" Node2="26"/>
+  <con Node1="20" Node2="22"/>
+  <con Node1="20" Node2="23"/>
+  <con Node1="21" Node2="23"/>
+  <con Node1="21" Node2="24"/>
+  <con Node1="21" Node2="28"/>
+  <con Node1="22" Node2="23"/>
+  <con Node1="23" Node2="24"/>
+  <con Node1="25" Node2="26"/>
+  <con Node1="25" Node2="27"/>
+  <con Node1="26" Node2="28"/>
+  <con Node1="26" Node2="29"/>
+  <con Node1="27" Node2="29"/>
+  <con Node1="27" Node2="30"/>
+  <con Node1="28" Node2="29"/>
+  <con Node1="29" Node2="30"/>
+</BKArray>
